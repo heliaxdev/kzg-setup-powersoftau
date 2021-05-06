@@ -151,6 +151,9 @@ mod tests {
     use ark_std::test_rng;
     use ark_poly_commit::Polynomial;
 
+    use ark_ec::bls12::G1Projective;
+    use ark_ec::ProjectiveCurve;
+
     type UniPoly_381 = DensePoly<<Bls12_381 as PairingEngine>::Fr>;
     // type UniPoly_377 = DensePoly<<Bls12_377 as PairingEngine>::Fr>;
 
@@ -221,13 +224,14 @@ mod tests {
             powers_of_g: ark_std::borrow::Cow::Owned(phase1.coeffs_g1.to_vec()),
             powers_of_gamma_g: ark_std::borrow::Cow::Owned(phase1.alpha_coeffs_g1),
         };
+
         let vk = VerifierKey {
             g: powers_from_zcash.powers_of_g[0],
             gamma_g: powers_from_zcash.powers_of_gamma_g[0],
-            h: phase1.coeffs_g2[0], //pp.h,
-            beta_h: phase1.beta_g2, //pp.beta_h,
+            h: phase1.coeffs_g2[1], //pp.h,
+            beta_h: phase1.coeffs_g2[2], //.beta_g2, //pp.beta_h,
             prepared_h: phase1.coeffs_g2[0].into(), //pp.prepared_h.clone(),
-            prepared_beta_h: phase1.beta_g2.into(), //pp.prepared_beta_h.clone(),
+            prepared_beta_h: phase1.coeffs_g2[1].into() //beta_g2.into(), //pp.prepared_beta_h.clone(),
         };
 
         // struct Phase1Parameters {
@@ -258,6 +262,7 @@ mod tests {
                 degree = usize::rand(rng) % 10;
             }
             println!("degree = {:?}", degree);
+
             // let pp = KZG10::<Bls12_381, UniPoly_381>::setup(degree, false, rng)?;
             // let (ck, vk) = trim(&pp, degree)?;
             let p = UniPoly_381::rand(degree, rng);
