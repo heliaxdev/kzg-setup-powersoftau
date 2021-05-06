@@ -95,9 +95,11 @@ struct Phase1Parameters{
     beta_coeffs_g1: Vec<G1Affine>
 }
 
-fn load_phase1(exp: usize) -> io::Result<Phase1Parameters>
+fn load_phase1(exp: u32) -> io::Result<Phase1Parameters>
 {
-    let m = 2^exp;
+    let m = 2_usize.pow(exp);
+    println!("exp = {:?}", exp);
+    println!("m = {:?}", m);
     let f = match File::open(format!("phase1radix2m{}", exp)) {
         Ok(f) => f,
         Err(e) => {
