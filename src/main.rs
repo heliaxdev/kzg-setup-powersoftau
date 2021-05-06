@@ -135,17 +135,57 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
+    #![allow(non_camel_case_types)]
     use crate::*;
     use ark_bls12_381::Fr;
     use ark_ff::{UniformRand, Zero};
     use ark_poly::univariate::DensePolynomial as DensePoly;
-    use ark_poly_commit::kzg10::{Commitment, Powers, KZG10};
+    use ark_poly_commit::kzg10::*;//{Commitment, Powers, KZG10};
     use ark_poly_commit::PCCommitment;
     use ark_poly_commit::UVPolynomial;
+    use ark_poly_commit::Error;
     use ark_std::test_rng;
+    use ark_bls12_377::Bls12_377;
+    use ark_bls12_381::Bls12_381;
+    use ark_ec::PairingEngine;
+    use ark_std::ops::Div;
+
+    type UniPoly_381 = DensePoly<<Bls12_381 as PairingEngine>::Fr>;
+    type UniPoly_377 = DensePoly<<Bls12_377 as PairingEngine>::Fr>;
+    type KZG_Bls12_381 = KZG10<Bls12_381, UniPoly_381>;
+
+    // impl<E: PairingEngine, P: UVPolynomial<E::Fr>> KZG10<E, P> {
+    /// Specializes the public parameters for a given maximum degree `d` for polynomials
+    /// `d` should be less that `pp.max_degree()`.
+    pub(crate) fn trim<E: PairingEngine, P: UVPolynomial<E::Fr>>(
+        pp: &UniversalParams<E>,
+        mut supported_degree: usize,
+    ) -> Result<(Powers<E>, VerifierKey<E>), Error> {
+        if supported_degree == 1 {
+            supported_degree += 1;
+        }
+        let powers_of_g = pp.powers_of_g[..=supported_degree].to_vec();
+        let powers_of_gamma_g = (0..=supported_degree)
+            .map(|i| pp.powers_of_gamma_g[&i])
+            .collect();
+
+        let powers = Powers {
+            powers_of_g: ark_std::borrow::Cow::Owned(powers_of_g),
+            powers_of_gamma_g: ark_std::borrow::Cow::Owned(powers_of_gamma_g),
+        };
+        let vk = VerifierKey {
+            g: pp.powers_of_g[0],
+            gamma_g: pp.powers_of_gamma_g[&0],
+            h: pp.h,
+            beta_h: pp.beta_h,
+            prepared_h: pp.prepared_h.clone(),
+            prepared_beta_h: pp.prepared_beta_h.clone(),
+        };
+        Ok((powers, vk))
+    }
 
     #[test]
-    fn completeness_test() {
+    fn add_commitments_test() {
         let phase1 = load_phase1(4).unwrap();
 
         let powers_from_zcash = Powers::<Bls12_381> {
@@ -172,5 +212,122 @@ mod tests {
         f_comm_2 += (f, &comm);
 
         assert_eq!(f_comm, f_comm_2);
+    }
+
+    fn end_to_end_test_template<E, P>() -> Result<(), Error>
+    where
+        E: PairingEngine,
+        P: UVPolynomial<E::Fr, Point = E::Fr>,
+        for<'a, 'b> &'a P: Div<&'b P, Output = P>,
+    {
+        let rng = &mut test_rng();
+        for _ in 0..100 {
+            let mut degree = 0;
+            while degree <= 1 {
+                degree = usize::rand(rng) % 20;
+            }
+            let pp = KZG10::<E, P>::setup(degree, false, rng)?;
+            let (ck, vk) = trim::<E, P>(&pp, degree)?;
+            let p = P::rand(degree, rng);
+            let hiding_bound = Some(1);
+            let (comm, rand) = KZG10::<E, P>::commit(&ck, &p, hiding_bound, Some(rng))?;
+            let point = E::Fr::rand(rng);
+            let value = p.evaluate(&point);
+            let proof = KZG10::<E, P>::open(&ck, &p, point, &rand)?;
+            assert!(
+                KZG10::<E, P>::check(&vk, &comm, point, value, &proof)?,
+                "proof was incorrect for max_degree = {}, polynomial_degree = {}, hiding_bound = {:?}",
+                degree,
+                p.degree(),
+                hiding_bound,
+            );
+        }
+        Ok(())
+    }
+
+    fn linear_polynomial_test_template<E, P>() -> Result<(), Error>
+    where
+        E: PairingEngine,
+        P: UVPolynomial<E::Fr, Point = E::Fr>,
+        for<'a, 'b> &'a P: Div<&'b P, Output = P>,
+    {
+        let rng = &mut test_rng();
+        for _ in 0..100 {
+            let degree = 50;
+            let pp = KZG10::<E, P>::setup(degree, false, rng)?;
+            let (ck, vk) = trim::<E, P>(&pp, 2)?;
+            let p = P::rand(1, rng);
+            let hiding_bound = Some(1);
+            let (comm, rand) = KZG10::<E, P>::commit(&ck, &p, hiding_bound, Some(rng))?;
+            let point = E::Fr::rand(rng);
+            let value = p.evaluate(&point);
+            let proof = KZG10::<E, P>::open(&ck, &p, point, &rand)?;
+            assert!(
+                KZG10::<E, P>::check(&vk, &comm, point, value, &proof)?,
+                "proof was incorrect for max_degree = {}, polynomial_degree = {}, hiding_bound = {:?}",
+                degree,
+                p.degree(),
+                hiding_bound,
+            );
+        }
+        Ok(())
+    }
+
+    fn batch_check_test_template<E, P>() -> Result<(), Error>
+    where
+        E: PairingEngine,
+        P: UVPolynomial<E::Fr, Point = E::Fr>,
+        for<'a, 'b> &'a P: Div<&'b P, Output = P>,
+    {
+        let rng = &mut test_rng();
+        for _ in 0..10 {
+            let mut degree = 0;
+            while degree <= 1 {
+                degree = usize::rand(rng) % 20;
+            }
+            let pp = KZG10::<E, P>::setup(degree, false, rng)?;
+            let (ck, vk) = trim::<E, P>(&pp, degree)?;
+            let mut comms = Vec::new();
+            let mut values = Vec::new();
+            let mut points = Vec::new();
+            let mut proofs = Vec::new();
+            for _ in 0..10 {
+                let p = P::rand(degree, rng);
+                let hiding_bound = Some(1);
+                let (comm, rand) = KZG10::<E, P>::commit(&ck, &p, hiding_bound, Some(rng))?;
+                let point = E::Fr::rand(rng);
+                let value = p.evaluate(&point);
+                let proof = KZG10::<E, P>::open(&ck, &p, point, &rand)?;
+
+                assert!(KZG10::<E, P>::check(&vk, &comm, point, value, &proof)?);
+                comms.push(comm);
+                values.push(value);
+                points.push(point);
+                proofs.push(proof);
+            }
+            assert!(KZG10::<E, P>::batch_check(
+                &vk, &comms, &points, &values, &proofs, rng
+            )?);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn end_to_end_test() {
+        end_to_end_test_template::<Bls12_377, UniPoly_377>().expect("test failed for bls12-377");
+        end_to_end_test_template::<Bls12_381, UniPoly_381>().expect("test failed for bls12-381");
+    }
+
+    #[test]
+    fn linear_polynomial_test() {
+        linear_polynomial_test_template::<Bls12_377, UniPoly_377>()
+            .expect("test failed for bls12-377");
+        linear_polynomial_test_template::<Bls12_381, UniPoly_381>()
+            .expect("test failed for bls12-381");
+    }
+    #[test]
+    fn batch_check_test() {
+        batch_check_test_template::<Bls12_377, UniPoly_377>().expect("test failed for bls12-377");
+        batch_check_test_template::<Bls12_381, UniPoly_381>().expect("test failed for bls12-381");
     }
 }
