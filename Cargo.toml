@@ -11,6 +11,7 @@ blake2b_simd = "0.5.11"
 
 ark-ec = { version = "^0.2.0", default-features = false }
 ark-poly = {version = "^0.2.0", default-features = false }
+# ark-poly = {path="/home/george/Projects/heliax/trusted-setup/algebra/poly"}
 ark-bls12-381 = { version = "^0.2.0", default-features = false, features = [ "curve" ] }
 ark-bls12-377 = { version = "^0.2.0", default-features = false, features = [ "curve" ] }
 ark-std = { version = "^0.2.0", default-features = false }
