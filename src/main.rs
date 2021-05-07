@@ -154,12 +154,8 @@ pub fn download_parameters(exp: String) -> Result<(), minreq::Error> {
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-    
     download_parameters(args[1].clone()).unwrap();
-
     let exp = args[1].parse::<u32>().unwrap();
-
-    // Download
     let phase1 = load_phase1(exp).unwrap();
 
     let powers_from_zcash = Powers::<Bls12_381> {
@@ -179,26 +175,20 @@ fn main() {
 mod tests {
     #![allow(non_camel_case_types)]
     use crate::*;
-    // use ark_bls12_377::Bls12_377;
     use ark_bls12_381::Bls12_381;
     use ark_bls12_381::Fr;
     use ark_ec::PairingEngine;
     use ark_ff::{UniformRand, Zero};
     use ark_poly::univariate::DensePolynomial as DensePoly;
-    use ark_poly_commit::kzg10::*; //{Commitment, Powers, KZG10};
+    use ark_poly_commit::kzg10::*;
     use ark_poly_commit::Error;
     use ark_poly_commit::PCCommitment;
     use ark_poly_commit::UVPolynomial;
-    // use ark_std::ops::Div;
     use ark_poly_commit::Polynomial;
     use ark_std::test_rng;
 
     type UniPoly_381 = DensePoly<<Bls12_381 as PairingEngine>::Fr>;
-    // type UniPoly_377 = DensePoly<<Bls12_377 as PairingEngine>::Fr>;
 
-    // impl<E: PairingEngine, P: UVPolynomial<E::Fr>> KZG10<E, P> {
-    /// Specializes the public parameters for a given maximum degree `d` for polynomials
-    /// `d` should be less that `pp.max_degree()`.
     fn trim(
         pp: &UniversalParams<Bls12_381>,
         mut supported_degree: usize,
