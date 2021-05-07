@@ -111,10 +111,52 @@ fn load_phase1(exp: u32) -> io::Result<Phase1Parameters> {
     })
 }
 
+use minreq;
 use std::env;
+
+pub fn download_parameters(exp: String) -> Result<(), minreq::Error> {
+    const DOWNLOAD_URL: &str = "https://download.z.cash/downloads/powersoftau/";
+
+    let fetch_params = |exp: String, expected_hash: &str| -> Result<(), minreq::Error> {
+        use std::io::Write;
+
+        let part_1 = minreq::get(format!("{}/phase1radix2m{}", DOWNLOAD_URL, exp)).send()?;
+
+        // // Verify parameter file hash.
+        // let hash = blake2b_simd::State::new()
+        //     .update(part_1.as_bytes())
+        //     .finalize()
+        //     .to_hex();
+        // if &hash != expected_hash {
+        //     return Err(io::Error::new(
+        //         io::ErrorKind::InvalidData,
+        //         format!(
+        //             "{} failed validation (expected: {}, actual: {}, fetched {} bytes)",
+        //             exp,
+        //             expected_hash,
+        //             hash,
+        //             part_1.as_bytes().len()
+        //         ),
+        //     )
+        //     .into());
+        // }
+
+        // Write parameter file.
+        let mut f = File::create(format!("./phase1radix2m{}", exp))?;
+        f.write_all(part_1.as_bytes())?;
+        Ok(())
+    };
+
+    fetch_params(exp, "")?;
+
+    Ok(())
+}
 
 fn main() {
     let args: Vec<String> = env::args().collect();
+    
+    download_parameters(args[1].clone()).unwrap();
+
     let exp = args[1].parse::<u32>().unwrap();
 
     // Download
@@ -148,11 +190,8 @@ mod tests {
     use ark_poly_commit::PCCommitment;
     use ark_poly_commit::UVPolynomial;
     // use ark_std::ops::Div;
-    use ark_std::test_rng;
     use ark_poly_commit::Polynomial;
-
-    use ark_ec::bls12::G1Projective;
-    use ark_ec::ProjectiveCurve;
+    use ark_std::test_rng;
 
     type UniPoly_381 = DensePoly<<Bls12_381 as PairingEngine>::Fr>;
     // type UniPoly_377 = DensePoly<<Bls12_377 as PairingEngine>::Fr>;
@@ -216,8 +255,7 @@ mod tests {
         assert_eq!(f_comm, f_comm_2);
     }
 
-    fn end_to_end_test_template() -> Result<(), Error>
-    {
+    fn end_to_end_test_template() -> Result<(), Error> {
         let phase1 = load_phase1(10).unwrap();
         println!("loaded phase1");
         let powers_from_zcash = Powers::<Bls12_381> {
@@ -228,10 +266,10 @@ mod tests {
         let vk = VerifierKey {
             g: powers_from_zcash.powers_of_g[0],
             gamma_g: powers_from_zcash.powers_of_gamma_g[0],
-            h: phase1.coeffs_g2[1], //pp.h,
-            beta_h: phase1.coeffs_g2[2], //.beta_g2, //pp.beta_h,
-            prepared_h: phase1.coeffs_g2[0].into(), //pp.prepared_h.clone(),
-            prepared_beta_h: phase1.coeffs_g2[1].into() //beta_g2.into(), //pp.prepared_beta_h.clone(),
+            h: phase1.coeffs_g2[0],                      //pp.h,
+            beta_h: phase1.coeffs_g2[1],                 //.beta_g2, //pp.beta_h,
+            prepared_h: phase1.coeffs_g2[0].into(),      //pp.prepared_h.clone(),
+            prepared_beta_h: phase1.coeffs_g2[1].into(), //beta_g2.into(), //pp.prepared_beta_h.clone(),
         };
 
         // struct Phase1Parameters {
@@ -267,10 +305,17 @@ mod tests {
             // let (ck, vk) = trim(&pp, degree)?;
             let p = UniPoly_381::rand(degree, rng);
             let hiding_bound = Some(1);
-            let (comm, rand) = KZG10::<Bls12_381, UniPoly_381>::commit(&powers_from_zcash, &p, hiding_bound, Some(rng))?;
-            let point = <ark_ec::bls12::Bls12<ark_bls12_381::Parameters> as PairingEngine>::Fr::rand(rng);
+            let (comm, rand) = KZG10::<Bls12_381, UniPoly_381>::commit(
+                &powers_from_zcash,
+                &p,
+                hiding_bound,
+                Some(rng),
+            )?;
+            let point =
+                <ark_ec::bls12::Bls12<ark_bls12_381::Parameters> as PairingEngine>::Fr::rand(rng);
             let value = p.evaluate(&point);
-            let proof = KZG10::<Bls12_381, UniPoly_381>::open(&powers_from_zcash, &p, point, &rand)?;
+            let proof =
+                KZG10::<Bls12_381, UniPoly_381>::open(&powers_from_zcash, &p, point, &rand)?;
             assert!(
                 KZG10::<Bls12_381, UniPoly_381>::check(&vk, &comm, point, value, &proof)?,
                 "proof was incorrect for max_degree = {}, polynomial_degree = {}, hiding_bound = {:?}",
@@ -293,7 +338,7 @@ mod tests {
     //         powers_of_g: ark_std::borrow::Cow::Owned(phase1.coeffs_g1.to_vec()),
     //         powers_of_gamma_g: ark_std::borrow::Cow::Owned(phase1.alpha_coeffs_g1),
     //     };
-    
+
     //     let rng = &mut test_rng();
     //     for _ in 0..100 {
     //         let degree = 50;
