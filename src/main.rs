@@ -152,13 +152,35 @@ pub fn download_parameters(exp: String) -> Result<(), minreq::Error> {
     Ok(())
 }
 
+use pairing::{
+    Engine,
+    PrimeField,
+    Field,
+    CurveAffine,
+    CurveProjective,
+    Wnaf,
+    bls12_381::{
+        Bls12,
+        Fr,
+        G1,
+        G2,
+        G1Affine,
+        G2Affine,
+    }
+};
+
+use bls12_381::G1Projective;
+use bls12_381::G2Projective;
+
+use ark_ec::ProjectiveCurve;
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     download_parameters(args[1].clone()).unwrap();
     let exp = args[1].parse::<u32>().unwrap();
     let phase1 = load_phase1(exp).unwrap();
 
-    let powers_from_zcash = Powers::<Bls12_381> {
+    let powersoftau = Powers::<Bls12_381> {
         powers_of_g: ark_std::borrow::Cow::Owned(phase1.coeffs_g1.to_vec()),
         powers_of_gamma_g: ark_std::borrow::Cow::Owned(phase1.alpha_coeffs_g1),
     };
@@ -167,9 +189,14 @@ fn main() {
     // println!("powersoftau g1 generator: {:?}", phase1.coeffs_g1[0]);
     // println!("powersoftau g2 generator: {:?}", phase1.coeffs_g2[0]);
     // use ark_ec::ProjectiveCurve;
-    // println!("arkwors g1 generator {:?}", ark_bls12_381::G1Projective::prime_subgroup_generator());
-    // println!("arkwors g2 generator {:?}", ark_bls12_381::G2Projective::prime_subgroup_generator());
+    // println!("arkwors g1 generator {:?}", ark_bls12_381::G1Affine::prime_subgroup_generator());
+    // println!("arkwors g2 generator {:?}", ark_bls12_381::G2Affine::prime_subgroup_generator());
+
+    // println!("G1Affine generator {:?}", bls12_381::G1Affine::generator());
+    // println!("G2Affine generator {:?}", bls12_381::G2Affine::generator());
 }
+
+
 
 #[cfg(test)]
 mod tests {
@@ -216,10 +243,31 @@ mod tests {
         Ok((powers, vk))
     }
 
+    
+    
+    use ark_ec::{AffineCurve};
+
+    pub struct TestingParameters {}
+    pub trait ThresholdEncryptionParameters {
+        type E: PairingEngine;
+    }
+    
+    impl ThresholdEncryptionParameters for TestingParameters {
+        type E = ark_bls12_381::Bls12_381;
+    }   
+
+    #[test]
+    fn test_phase1() {
+        let phase1 = load_phase1(4).unwrap();
+
+        <<TestingParameters as ThresholdEncryptionParameters>::E as PairingEngine>::G1Affine::product_of_pairings([(phase1.coeffs_g1[0], phase1.coeffs_g2[1]),
+        (-phase1.coeffs_g1[1], phase1.coeffs_g2[1])]);
+    }
+
     #[test]
     fn add_commitments_test() {
         let phase1 = load_phase1(4).unwrap();
-        let powers_from_zcash = Powers::<Bls12_381> {
+        let powersoftau = Powers::<Bls12_381> {
             powers_of_g: ark_std::borrow::Cow::Owned(phase1.coeffs_g1.to_vec()),
             powers_of_gamma_g: ark_std::borrow::Cow::Owned(phase1.alpha_coeffs_g1),
         };
@@ -237,8 +285,8 @@ mod tests {
         f_p += (f, &p);
         let hiding_bound = None;
 
-        let (comm, _) = KZG10::commit(&powers_from_zcash, &p, hiding_bound, Some(rng)).unwrap();
-        let (f_comm, _) = KZG10::commit(&powers_from_zcash, &f_p, hiding_bound, Some(rng)).unwrap();
+        let (comm, _) = KZG10::commit(&powersoftau, &p, hiding_bound, Some(rng)).unwrap();
+        let (f_comm, _) = KZG10::commit(&powersoftau, &f_p, hiding_bound, Some(rng)).unwrap();
         let mut f_comm_2 = Commitment::empty();
         f_comm_2 += (f, &comm);
 
@@ -248,14 +296,15 @@ mod tests {
     fn end_to_end_test_template() -> Result<(), Error> {
         let phase1 = load_phase1(10).unwrap();
         println!("loaded phase1");
-        let powers_from_zcash = Powers::<Bls12_381> {
+        let powersoftau = Powers::<Bls12_381> {
             powers_of_g: ark_std::borrow::Cow::Owned(phase1.coeffs_g1.to_vec()),
-            powers_of_gamma_g: ark_std::borrow::Cow::Owned(phase1.alpha_coeffs_g1),
+            // powers_of_gamma_g: ark_std::borrow::Cow::Owned(phase1.alpha_coeffs_g1),
+            powers_of_gamma_g: ark_std::borrow::Cow::Owned(phase1.beta_coeffs_g1),
         };
 
         let vk = VerifierKey {
-            g: powers_from_zcash.powers_of_g[0],
-            gamma_g: powers_from_zcash.powers_of_gamma_g[0],
+            g: powersoftau.powers_of_g[0],
+            gamma_g: powersoftau.powers_of_gamma_g[0],
             h: phase1.coeffs_g2[0],                      //pp.h,
             beta_h: phase1.coeffs_g2[1],                 //.beta_g2, //pp.beta_h,
             prepared_h: phase1.coeffs_g2[0].into(),      //pp.prepared_h.clone(),
@@ -291,21 +340,21 @@ mod tests {
             }
             println!("degree = {:?}", degree);
 
-            // let pp = KZG10::<Bls12_381, UniPoly_381>::setup(degree, false, rng)?;
+            let pp = KZG10::<Bls12_381, UniPoly_381>::setup(degree, false, rng)?;
             // let (ck, vk) = trim(&pp, degree)?;
             let p = UniPoly_381::rand(degree, rng);
-            let hiding_bound = Some(1);
+            let hiding_bound = None;//Some(1);
             let (comm, rand) = KZG10::<Bls12_381, UniPoly_381>::commit(
-                &powers_from_zcash,
+                &powersoftau,
                 &p,
                 hiding_bound,
-                Some(rng),
+                None, //Some(rng),
             )?;
             let point =
                 <ark_ec::bls12::Bls12<ark_bls12_381::Parameters> as PairingEngine>::Fr::rand(rng);
             let value = p.evaluate(&point);
             let proof =
-                KZG10::<Bls12_381, UniPoly_381>::open(&powers_from_zcash, &p, point, &rand)?;
+                KZG10::<Bls12_381, UniPoly_381>::open(&powersoftau, &p, point, &rand)?;
             assert!(
                 KZG10::<Bls12_381, UniPoly_381>::check(&vk, &comm, point, value, &proof)?,
                 "proof was incorrect for max_degree = {}, polynomial_degree = {}, hiding_bound = {:?}",
@@ -324,7 +373,7 @@ mod tests {
     //     for<'a, 'b> &'a P: Div<&'b P, Output = P>,
     // {
     //     let phase1 = load_phase1(4).unwrap();
-    //     let powers_from_zcash = Powers::<Bls12_381> {
+    //     let powersoftau = Powers::<Bls12_381> {
     //         powers_of_g: ark_std::borrow::Cow::Owned(phase1.coeffs_g1.to_vec()),
     //         powers_of_gamma_g: ark_std::borrow::Cow::Owned(phase1.alpha_coeffs_g1),
     //     };
@@ -358,7 +407,7 @@ mod tests {
     //     for<'a, 'b> &'a P: Div<&'b P, Output = P>,
     // {
     //     let phase1 = load_phase1(4).unwrap();
-    //     let powers_from_zcash = Powers::<Bls12_381> {
+    //     let powersoftau = Powers::<Bls12_381> {
     //         powers_of_g: ark_std::borrow::Cow::Owned(phase1.coeffs_g1.to_vec()),
     //         powers_of_gamma_g: ark_std::borrow::Cow::Owned(phase1.alpha_coeffs_g1),
     //     };
