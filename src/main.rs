@@ -259,48 +259,34 @@ mod tests {
 
     #[test]
     fn test_phase1() {
+        let rng = &mut test_rng();
         let phase1 = load_phase1(4).unwrap();
+        let degree = 4;
+        use ark_ff::One;
+        let one = ArkFqk::one();
 
         for i in 0..phase1.coeffs_g1.len()-1{
             let a: ArkG1Prepared = (-phase1.coeffs_g1[i]).into();
             let b = phase1.coeffs_g2[i+1].into();
             let c = phase1.coeffs_g1[i+1].into();
             let d = phase1.coeffs_g2[i].into();
-            let p = Bls12_381::product_of_pairings(&[(a, b),
-            (c, d)]);
-            use ark_ff::One;
-            let one = ArkFqk::one();
+            let p = Bls12_381::product_of_pairings(&[(a, b), (c, d)]);
             assert!(p == one);
         }
-    }
 
-    #[test]
-    fn add_commitments_test() {
-        let phase1 = load_phase1(4).unwrap();
-        let powersoftau = Powers::<Bls12_381> {
-            powers_of_g: ark_std::borrow::Cow::Owned(phase1.coeffs_g1.to_vec()),
-            powers_of_gamma_g: ark_std::borrow::Cow::Owned(phase1.alpha_coeffs_g1),
-        };
+        let pp = KZG10::<Bls12_381, UniPoly_381>::setup(degree, false, rng).unwrap();
 
-        let rng = &mut test_rng();
-        let p = DensePoly::from_coefficients_slice(&[
-            Fr::rand(rng),
-            Fr::rand(rng),
-            Fr::rand(rng),
-            Fr::rand(rng),
-            Fr::rand(rng),
-        ]);
-        let f = Fr::rand(rng);
-        let mut f_p = DensePoly::zero();
-        f_p += (f, &p);
-        let hiding_bound = None;
-
-        let (comm, _) = KZG10::commit(&powersoftau, &p, hiding_bound, Some(rng)).unwrap();
-        let (f_comm, _) = KZG10::commit(&powersoftau, &f_p, hiding_bound, Some(rng)).unwrap();
-        let mut f_comm_2 = Commitment::empty();
-        f_comm_2 += (f, &comm);
-
-        assert_eq!(f_comm, f_comm_2);
+        let a: ArkG1Prepared = (-pp.powers_of_g[0]).into();
+        let b = pp.h.into();
+        let c = pp.powers_of_g[1].into();
+        let d = pp.beta_h.into();
+        let p = Bls12_381::product_of_pairings(&[(a, b), (c, d)]);
+        assert!(p == one);
+        // phase1.alpha
+        // phase1.alpha_coeffs_g1
+        // phase1.beta_coeffs_g1
+        // phase1.beta_g1
+        // phase1.beta_g2
     }
 
     fn end_to_end_test_template() -> Result<(), Error> {
@@ -350,7 +336,7 @@ mod tests {
             }
             println!("degree = {:?}", degree);
 
-            let pp = KZG10::<Bls12_381, UniPoly_381>::setup(degree, false, rng)?;
+            // let pp = KZG10::<Bls12_381, UniPoly_381>::setup(degree, false, rng)?;
             // let (ck, vk) = trim(&pp, degree)?;
             let p = UniPoly_381::rand(degree, rng);
             let hiding_bound = None;//Some(1);
@@ -374,6 +360,35 @@ mod tests {
             );
         }
         Ok(())
+    }
+
+    #[test]
+    fn add_commitments_test() {
+        let phase1 = load_phase1(4).unwrap();
+        let powersoftau = Powers::<Bls12_381> {
+            powers_of_g: ark_std::borrow::Cow::Owned(phase1.coeffs_g1.to_vec()),
+            powers_of_gamma_g: ark_std::borrow::Cow::Owned(phase1.alpha_coeffs_g1),
+        };
+
+        let rng = &mut test_rng();
+        let p = DensePoly::from_coefficients_slice(&[
+            Fr::rand(rng),
+            Fr::rand(rng),
+            Fr::rand(rng),
+            Fr::rand(rng),
+            Fr::rand(rng),
+        ]);
+        let f = Fr::rand(rng);
+        let mut f_p = DensePoly::zero();
+        f_p += (f, &p);
+        let hiding_bound = None;
+
+        let (comm, _) = KZG10::commit(&powersoftau, &p, hiding_bound, Some(rng)).unwrap();
+        let (f_comm, _) = KZG10::commit(&powersoftau, &f_p, hiding_bound, Some(rng)).unwrap();
+        let mut f_comm_2 = Commitment::empty();
+        f_comm_2 += (f, &comm);
+
+        assert_eq!(f_comm, f_comm_2);
     }
 
     // fn linear_polynomial_test_template<E, P>() -> Result<(), Error>
