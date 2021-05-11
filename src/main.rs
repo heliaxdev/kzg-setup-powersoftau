@@ -260,15 +260,18 @@ mod tests {
     #[test]
     fn test_phase1() {
         let phase1 = load_phase1(4).unwrap();
-        let a: ArkG1Prepared = (-phase1.coeffs_g1[0]).into();
-        let b = phase1.coeffs_g2[1].into();
-        let c = phase1.coeffs_g1[1].into();
-        let d = phase1.coeffs_g2[0].into();
-        let p = Bls12_381::product_of_pairings(&[(a, b),
-        (c, d)]);
-        use ark_ff::One;
-        let one = ArkFqk::one();
-        assert!(p == one);
+
+        for i in 0..phase1.coeffs_g1.len()-1{
+            let a: ArkG1Prepared = (-phase1.coeffs_g1[i]).into();
+            let b = phase1.coeffs_g2[i+1].into();
+            let c = phase1.coeffs_g1[i+1].into();
+            let d = phase1.coeffs_g2[i].into();
+            let p = Bls12_381::product_of_pairings(&[(a, b),
+            (c, d)]);
+            use ark_ff::One;
+            let one = ArkFqk::one();
+            assert!(p == one);
+        }
     }
 
     #[test]
