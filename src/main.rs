@@ -15,6 +15,9 @@ use ark_ec::PairingEngine;
 use ark_serialize::{CanonicalDeserialize, SerializationError};
 type ArkG1Affine = <ark_ec::bls12::Bls12<ark_bls12_381::Parameters> as PairingEngine>::G1Affine;
 type ArkG2Affine = <ark_ec::bls12::Bls12<ark_bls12_381::Parameters> as PairingEngine>::G2Affine;
+type ArkG1Prepared = <ark_ec::bls12::Bls12<ark_bls12_381::Parameters> as PairingEngine>::G1Prepared;
+type ArkG2Prepared = <ark_ec::bls12::Bls12<ark_bls12_381::Parameters> as PairingEngine>::G2Prepared;
+type ArkFqk = <ark_ec::bls12::Bls12<ark_bls12_381::Parameters> as PairingEngine>::Fqk;
 
 fn read_g1(reader: &mut BufReader<File>) -> Result<ArkG1Affine, SerializationError> {
     let mut repr = G1Uncompressed::empty();
@@ -202,9 +205,10 @@ fn main() {
 mod tests {
     #![allow(non_camel_case_types)]
     use crate::*;
+    use ark_bls12_377::FQ2_ONE;
     use ark_bls12_381::Bls12_381;
     use ark_bls12_381::Fr;
-    use ark_ec::PairingEngine;
+    use ark_ec::{PairingEngine, bls12::G2Prepared};
     use ark_ff::{UniformRand, Zero};
     use ark_poly::univariate::DensePolynomial as DensePoly;
     use ark_poly_commit::kzg10::*;
@@ -213,6 +217,7 @@ mod tests {
     use ark_poly_commit::UVPolynomial;
     use ark_poly_commit::Polynomial;
     use ark_std::test_rng;
+    use bellman::groth16::Parameters;
 
     type UniPoly_381 = DensePoly<<Bls12_381 as PairingEngine>::Fr>;
 
@@ -243,10 +248,6 @@ mod tests {
         Ok((powers, vk))
     }
 
-    
-    
-    use ark_ec::{AffineCurve};
-
     pub struct TestingParameters {}
     pub trait ThresholdEncryptionParameters {
         type E: PairingEngine;
@@ -259,9 +260,15 @@ mod tests {
     #[test]
     fn test_phase1() {
         let phase1 = load_phase1(4).unwrap();
-
-        <<TestingParameters as ThresholdEncryptionParameters>::E as PairingEngine>::G1Affine::product_of_pairings([(phase1.coeffs_g1[0], phase1.coeffs_g2[1]),
-        (-phase1.coeffs_g1[1], phase1.coeffs_g2[1])]);
+        let a: ArkG1Prepared = (-phase1.coeffs_g1[0]).into();
+        let b = phase1.coeffs_g2[1].into();
+        let c = phase1.coeffs_g1[1].into();
+        let d = phase1.coeffs_g2[0].into();
+        let p = Bls12_381::product_of_pairings(&[(a, b),
+        (c, d)]);
+        use ark_ff::One;
+        let one = ArkFqk::one();
+        assert!(p == one);
     }
 
     #[test]
