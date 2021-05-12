@@ -261,7 +261,7 @@ mod tests {
     fn test_phase1() {
         let rng = &mut test_rng();
         let phase1 = load_phase1(4).unwrap();
-        let degree = 4;
+        let degree = 2_usize.pow(4);
         use ark_ff::One;
         let one = ArkFqk::one();
 
@@ -275,6 +275,16 @@ mod tests {
         }
 
         let pp = KZG10::<Bls12_381, UniPoly_381>::setup(degree, false, rng).unwrap();
+
+        for i in 0..pp.powers_of_g.len()-1 {
+            let a: ArkG1Prepared = (-pp.powers_of_g[i]).into();
+            let b = pp.h.into();
+            let c = pp.powers_of_g[i+1].into();
+            let d = pp.beta_h.into();
+            let p = Bls12_381::product_of_pairings(&[(a, b), (c, d)]);
+            // assert!(p == one);
+            println!("{:?}", p == one);
+        }
 
         let a: ArkG1Prepared = (-pp.powers_of_g[0]).into();
         let b = pp.h.into();
