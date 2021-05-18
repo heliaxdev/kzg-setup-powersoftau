@@ -20,7 +20,8 @@ ark-poly-commit = {path="/home/george/Projects/heliax/trusted-setup/poly-commit-
 ark-ff = { version = "^0.2.0", default-features = false }
 ark-serialize = "0.2.0"
 pairing = "0.14"
-powersoftau = "0.1.0"
+# powersoftau = "0.1.0"
+powersoftau = {path="/home/george/Projects/heliax/trusted-setup/powersoftau"}
 minreq = { version = "2", features = ["https"]}
 
 [profile.test]

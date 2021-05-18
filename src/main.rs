@@ -1,7 +1,4 @@
-use std::{
-    fs::File,
-    io::{self, BufReader, Read},
-};
+use std::{fs::{File, OpenOptions}, io::{self, BufReader, Read}};
 
 use pairing::{
     bls12_381::{G1Uncompressed, G2Uncompressed},
@@ -75,7 +72,8 @@ fn load_phase1(exp: u32) -> io::Result<Phase1Parameters> {
     let m = 2_usize.pow(exp);
     println!("exp = {:?}", exp);
     println!("m = {:?}", m);
-    let f = match File::open(format!("phase1radix2m{}", exp)) {
+    let f = match File::open(format!("../my-response-{}", exp)) {
+    // let f = match File::open(format!("phase1radix2m{}", exp)) {
         Ok(f) => f,
         Err(e) => {
             panic!("Couldn't load phase1radix2m{}: {:?}", exp, e);
@@ -84,24 +82,31 @@ fn load_phase1(exp: u32) -> io::Result<Phase1Parameters> {
     let f = &mut BufReader::with_capacity(1024 * 1024, f);
 
     let alpha = read_g1(f).unwrap(); //?;
+    println!("read alpha: {:?}", alpha);
     let beta_g1 = read_g1(f).unwrap(); //?;
+    println!("read beta_g1: {:?}", beta_g1);
     let beta_g2 = read_g2(f).unwrap(); //?;
+    println!("read beta_g2: {:?}", beta_g2);
     let mut coeffs_g1 = Vec::with_capacity(m);
     for _ in 0..m {
         coeffs_g1.push(read_g1(f).unwrap()); //?);
     }
+    println!("read coeffs_g1[0], sample: {:?}", coeffs_g1[0]);
     let mut coeffs_g2 = Vec::with_capacity(m);
     for _ in 0..m {
         coeffs_g2.push(read_g2(f).unwrap()); //?);
     }
+    println!("read coeffs_g2[0], sample: {:?}", coeffs_g2[0]);
     let mut alpha_coeffs_g1 = Vec::with_capacity(m);
     for _ in 0..m {
         alpha_coeffs_g1.push(read_g1(f).unwrap()); //?);
     }
+    println!("read alpha_coeffs_g1[0], sample: {:?}", alpha_coeffs_g1[0]);
     let mut beta_coeffs_g1 = Vec::with_capacity(m);
     for _ in 0..m {
         beta_coeffs_g1.push(read_g1(f).unwrap()); //?);
     }
+    println!("read beta_coeffs_g1[0], sample: {:?}", beta_coeffs_g1[0]);
 
     Ok(Phase1Parameters {
         alpha: alpha,
@@ -125,6 +130,7 @@ pub fn download_parameters(exp: String) -> Result<(), minreq::Error> {
 
         let part_1 = minreq::get(format!("{}/phase1radix2m{}", DOWNLOAD_URL, exp)).send()?;
 
+        // TODO
         // // Verify parameter file hash.
         // let hash = blake2b_simd::State::new()
         //     .update(part_1.as_bytes())
@@ -178,15 +184,15 @@ use bls12_381::G2Projective;
 use ark_ec::ProjectiveCurve;
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
-    download_parameters(args[1].clone()).unwrap();
-    let exp = args[1].parse::<u32>().unwrap();
-    let phase1 = load_phase1(exp).unwrap();
+    // let args: Vec<String> = env::args().collect();
+    // download_parameters(args[1].clone()).unwrap();
+    // let exp = args[1].parse::<u32>().unwrap();
+    // let phase1 = load_phase1(exp).unwrap();
 
-    let powersoftau = Powers::<Bls12_381> {
-        powers_of_g: ark_std::borrow::Cow::Owned(phase1.coeffs_g1.to_vec()),
-        powers_of_gamma_g: ark_std::borrow::Cow::Owned(phase1.alpha_coeffs_g1),
-    };
+    // let powersoftau = Powers::<Bls12_381> {
+    //     powers_of_g: ark_std::borrow::Cow::Owned(phase1.coeffs_g1.to_vec()),
+    //     powers_of_gamma_g: ark_std::borrow::Cow::Owned(phase1.alpha_coeffs_g1),
+    // };
 
     // // Checking if generators match
     // println!("powersoftau g1 generator: {:?}", phase1.coeffs_g1[0]);
@@ -197,9 +203,122 @@ fn main() {
 
     // println!("G1Affine generator {:?}", bls12_381::G1Affine::generator());
     // println!("G2Affine generator {:?}", bls12_381::G2Affine::generator());
+
+
+    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // use powersoftau::{Accumulator, UseCompression, CheckForCorrectness, HashReader ,ACCUMULATOR_BYTE_SIZE};
+
+    // // let ACCUMULATOR_BYTE_SIZE = 18592;
+    // let reader = OpenOptions::new()
+    // .read(true)
+    // .open("../my-challenge-5").expect("unable open `./challenge` in this directory");
+
+    // {
+    //     let metadata = reader.metadata().expect("unable to get filesystem metadata for `./challenge`");
+    //     if metadata.len() != (ACCUMULATOR_BYTE_SIZE as u64) {
+    //         panic!("The size of `./challenge` should be {}, but it's {}, so something isn't right.", ACCUMULATOR_BYTE_SIZE, metadata.len());
+    //     }
+    // }
+
+    // let reader = BufReader::new(reader);
+    // let mut reader = HashReader::new(reader);
+    // use std::fs::OpenOptions;
+
+    // // Create `./response` in this directory
+    // // let writer = OpenOptions::new()
+    // //                         .read(false)
+    // //                         .write(true)
+    // //                         .create_new(true)
+    // //                         .open("response").expect("unable to create `./response` in this directory");
+    
+    // println!("Reading `./challenge` into memory...");
+
+    // // Read the BLAKE2b hash of the previous contribution
+    // {   
+    //     // We don't need to do anything with it, but it's important for
+    //     // the hash chain.
+    //     let mut tmp = [0; 64];
+    //     reader.read_exact(&mut tmp).expect("unable to read BLAKE2b hash of previous contribution");
+    // }   
+
+    // // Load the current accumulator into memory
+    // let mut acc = Accumulator::deserialize(&mut reader, UseCompression::No, CheckForCorrectness::No).expect("unable to read uncompressed accumulator");
+    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    use powersoftau::{Accumulator, UseCompression, CheckForCorrectness, HashReader ,ACCUMULATOR_BYTE_SIZE, CONTRIBUTION_BYTE_SIZE, DeserializationError};
+
+    let file = "../my-response-5";
+
+    // Try to load `./response` from disk.
+    let response_reader = OpenOptions::new()
+                            .read(true)
+                            .open(file).expect("unable open `./response` in this directory");
+
+    {
+        let metadata = response_reader.metadata().expect("unable to get filesystem metadata for `./response`");
+        if metadata.len() != (CONTRIBUTION_BYTE_SIZE as u64) {
+            panic!("The size of `./response` should be {}, but it's {}, so something isn't right.", CONTRIBUTION_BYTE_SIZE, metadata.len());
+        }
+    }
+
+    let response_reader = BufReader::new(response_reader);
+    let mut response_reader = HashReader::new(response_reader);
+
+    // Check the hash chain
+    {   
+        let mut response_challenge_hash = [0; 64];
+        response_reader.read_exact(&mut response_challenge_hash).expect("couldn't read hash of challenge file from response file");
+
+        // if &response_challenge_hash[..] != current_accumulator_hash.as_slice() {
+        //     panic!("Hash chain failure. This is not the right response.");
+        // }
+    }
+
+    let TAU_POWERS_LENGTH: usize = (1 << 5);
+    let TAU_POWERS_G1_LENGTH: usize = (TAU_POWERS_LENGTH << 1) - 1;
+
+    fn accumulator_deserialize<R: Read>(
+        reader: &mut R,
+        compression: UseCompression,
+        checked: CheckForCorrectness
+    ) -> Result<Accumulator, DeserializationError> {
+        let TAU_POWERS_LENGTH: usize = (1 << 5);
+        let TAU_POWERS_G1_LENGTH: usize = (TAU_POWERS_LENGTH << 1) - 1;
+
+        Ok(Accumulator {
+            tau_powers_g1: vec![G1Affine::one(); TAU_POWERS_G1_LENGTH],
+            tau_powers_g2: vec![G2Affine::one(); TAU_POWERS_LENGTH],
+            alpha_tau_powers_g1: vec![G1Affine::one(); TAU_POWERS_LENGTH],
+            beta_tau_powers_g1: vec![G1Affine::one(); TAU_POWERS_LENGTH],
+            beta_g2: G2Affine::one()
+        })
+    }
+    // Load the response's accumulator
+    let new_accumulator = Accumulator::deserialize(&mut response_reader, UseCompression::Yes, CheckForCorrectness::Yes)
+                                                  .expect("wasn't able to deserialize the response file's accumulator");
+
+    println!("{:?}", new_accumulator);
+
+    // let mut repr = G1Uncompressed::empty();
+    // reader.read_exact(repr.as_mut()).unwrap(); //?;
+
+    // let repr_bytes = repr.as_mut();
+    // let mut repr_bytes_vec: Vec<u8> = vec![];
+    // repr_bytes_vec.extend_from_slice(&repr_bytes[000..=095]);
+
+    // repr_bytes_vec[000..=047].reverse();
+    // repr_bytes_vec[048..=095].reverse();
+
+    // let repr_new = ArkG1Affine::deserialize_uncompressed(&repr_bytes_vec[..]);
+    // repr_new
+
+    // let powersoftau = Powers::<Bls12_381> {
+        // powers_of_g: new_accumulator.tau_powers_g1,
+        // powers_of_gamma_g: ark_std::borrow::Cow::Owned(phase1.alpha_coeffs_g1),
+    // };
+    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 }
-
-
 
 #[cfg(test)]
 mod tests {
@@ -255,7 +374,7 @@ mod tests {
     
     impl ThresholdEncryptionParameters for TestingParameters {
         type E = ark_bls12_381::Bls12_381;
-    }   
+    }
 
     #[test]
     fn test_phase1() {
@@ -265,7 +384,7 @@ mod tests {
         use ark_ff::One;
         let one = ArkFqk::one();
 
-        for i in 0..phase1.coeffs_g1.len()-1{
+        for i in 0..phase1.coeffs_g1.len()-1 {
             let a: ArkG1Prepared = (-phase1.coeffs_g1[i]).into();
             let b = phase1.coeffs_g2[i+1].into();
             let c = phase1.coeffs_g1[i+1].into();
@@ -278,26 +397,21 @@ mod tests {
 
         for i in 0..pp.powers_of_g.len()-1 {
             let a: ArkG1Prepared = (-pp.powers_of_g[i]).into();
-            let b = pp.h.into();
+            let b = pp.beta_h.into();
             let c = pp.powers_of_g[i+1].into();
-            let d = pp.beta_h.into();
+            let d = pp.h.into();
             let p = Bls12_381::product_of_pairings(&[(a, b), (c, d)]);
-            // assert!(p == one);
+            assert!(p == one);
             println!("{:?}", p == one);
         }
 
-        let a: ArkG1Prepared = (-pp.powers_of_g[0]).into();
-        let b = pp.h.into();
-        let c = pp.powers_of_g[1].into();
-        let d = pp.beta_h.into();
-        let p = Bls12_381::product_of_pairings(&[(a, b), (c, d)]);
-        assert!(p == one);
         // phase1.alpha
         // phase1.alpha_coeffs_g1
         // phase1.beta_coeffs_g1
         // phase1.beta_g1
         // phase1.beta_g2
     }
+
 
     fn end_to_end_test_template() -> Result<(), Error> {
         let phase1 = load_phase1(10).unwrap();
@@ -346,8 +460,10 @@ mod tests {
             }
             println!("degree = {:?}", degree);
 
-            // let pp = KZG10::<Bls12_381, UniPoly_381>::setup(degree, false, rng)?;
-            // let (ck, vk) = trim(&pp, degree)?;
+            let kzg_pp = KZG10::<Bls12_381, UniPoly_381>::setup(degree, false, rng)?;
+            let (kzg_ck, kzg_vk) = trim(&kzg_pp, degree)?;
+
+
             let p = UniPoly_381::rand(degree, rng);
             let hiding_bound = None;//Some(1);
             let (comm, rand) = KZG10::<Bls12_381, UniPoly_381>::commit(
