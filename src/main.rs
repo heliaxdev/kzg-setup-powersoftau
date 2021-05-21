@@ -150,7 +150,8 @@ fn load_powersoftau_accum(exp: u32) -> io::Result<PowersOfTau> {
     let m = 2_usize.pow(exp);
     println!("exp = {:?}", exp);
     println!("m = {:?}", m);
-    let f = match File::open(format!("./my-response-uncompr-{}", exp)) {
+    let f = match File::open("./final-response") {
+    // let f = match File::open(format!("./my-response-uncompr-{}", exp)) {
     // let f = match File::open(format!("../phase1radix2m{}", exp)) {
         Ok(f) => f,
         Err(e) => {
@@ -159,7 +160,8 @@ fn load_powersoftau_accum(exp: u32) -> io::Result<PowersOfTau> {
     };
     let f = &mut BufReader::with_capacity(1024 * 1024, f);
 
-    let TAU_POWERS_LENGTH: usize = (1 << exp);
+    // let TAU_POWERS_LENGTH: usize = 1 << exp;
+    let TAU_POWERS_LENGTH: usize = 1 << 21;
     let TAU_POWERS_G1_LENGTH: usize = (TAU_POWERS_LENGTH << 1) - 1;
 
     let mut tau_powers_g1 = Vec::with_capacity(TAU_POWERS_G1_LENGTH);
@@ -255,8 +257,8 @@ fn main() {
     // println!("G2Affine generator {:?}", bls12_381::G2Affine::generator());
 
 
-    let tau_powers = load_powersoftau_accum(exp);
-    println!("tau_powers = {:?}", tau_powers);
+    // let tau_powers = load_powersoftau_accum(exp);
+    // println!("tau_powers = {:?}", tau_powers);
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // use powersoftau::{Accumulator, UseCompression, CheckForCorrectness, HashReader ,ACCUMULATOR_BYTE_SIZE};
@@ -300,69 +302,75 @@ fn main() {
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    // use powersoftau::{Accumulator, UseCompression, CheckForCorrectness, HashReader ,ACCUMULATOR_BYTE_SIZE, CONTRIBUTION_BYTE_SIZE, DeserializationError};
+    use powersoftau::{Accumulator, UseCompression, CheckForCorrectness, HashReader ,ACCUMULATOR_BYTE_SIZE, CONTRIBUTION_BYTE_SIZE, DeserializationError};
 
-    // let file = "../my-response-5";
+    let file = "./final-response";
+    let file_out = "./final-response-uncompr-21";
+    let exp = 21;
 
-    // // Try to load `./response` from disk.
-    // let response_reader = OpenOptions::new()
-    //                         .read(true)
-    //                         .open(file).expect("unable open `./response` in this directory");
+    // Try to load `./response` from disk.
+    let response_reader = OpenOptions::new()
+                            .read(true)
+                            .open(file).expect("unable open `./response` in this directory");
 
-    // {
-    //     let metadata = response_reader.metadata().expect("unable to get filesystem metadata for `./response`");
-    //     if metadata.len() != (CONTRIBUTION_BYTE_SIZE as u64) {
-    //         panic!("The size of `./response` should be {}, but it's {}, so something isn't right.", CONTRIBUTION_BYTE_SIZE, metadata.len());
-    //     }
-    // }
+    {
+        let metadata = response_reader.metadata().expect("unable to get filesystem metadata for `./response`");
+        if metadata.len() != (CONTRIBUTION_BYTE_SIZE as u64) {
+            panic!("The size of `./response` should be {}, but it's {}, so something isn't right.", CONTRIBUTION_BYTE_SIZE, metadata.len());
+        }
+    }
 
-    // let response_reader = BufReader::new(response_reader);
-    // let mut response_reader = HashReader::new(response_reader);
+    let response_reader = BufReader::new(response_reader);
+    let mut response_reader = HashReader::new(response_reader);
 
-    // // Check the hash chain
-    // {   
-    //     let mut response_challenge_hash = [0; 64];
-    //     response_reader.read_exact(&mut response_challenge_hash).expect("couldn't read hash of challenge file from response file");
+    // Check the hash chain
+    {   
+        let mut response_challenge_hash = [0; 64];
+        response_reader.read_exact(&mut response_challenge_hash).expect("couldn't read hash of challenge file from response file");
 
-    //     // if &response_challenge_hash[..] != current_accumulator_hash.as_slice() {
-    //     //     panic!("Hash chain failure. This is not the right response.");
-    //     // }
-    // }
+        // if &response_challenge_hash[..] != current_accumulator_hash.as_slice() {
+        //     panic!("Hash chain failure. This is not the right response.");
+        // }
+    }
 
-    // let TAU_POWERS_LENGTH: usize = (1 << 5);
-    // let TAU_POWERS_G1_LENGTH: usize = (TAU_POWERS_LENGTH << 1) - 1;
+    let TAU_POWERS_LENGTH: usize = 1 << exp;
+    let TAU_POWERS_G1_LENGTH: usize = (TAU_POWERS_LENGTH << 1) - 1;
 
-    // fn accumulator_deserialize<R: Read>(
-    //     reader: &mut R,
-    //     compression: UseCompression,
-    //     checked: CheckForCorrectness
-    // ) -> Result<Accumulator, DeserializationError> {
-    //     let TAU_POWERS_LENGTH: usize = (1 << 5);
-    //     let TAU_POWERS_G1_LENGTH: usize = (TAU_POWERS_LENGTH << 1) - 1;
+    fn accumulator_deserialize<R: Read>(
+        reader: &mut R,
+        compression: UseCompression,
+        checked: CheckForCorrectness
+    ) -> Result<Accumulator, DeserializationError> {
+        let TAU_POWERS_LENGTH: usize = 1 << 21 /* exp */;
+        let TAU_POWERS_G1_LENGTH: usize = (TAU_POWERS_LENGTH << 1) - 1;
 
-    //     Ok(Accumulator {
-    //         tau_powers_g1: vec![G1Affine::one(); TAU_POWERS_G1_LENGTH],
-    //         tau_powers_g2: vec![G2Affine::one(); TAU_POWERS_LENGTH],
-    //         alpha_tau_powers_g1: vec![G1Affine::one(); TAU_POWERS_LENGTH],
-    //         beta_tau_powers_g1: vec![G1Affine::one(); TAU_POWERS_LENGTH],
-    //         beta_g2: G2Affine::one()
-    //     })
-    // }
+        Ok(Accumulator {
+            tau_powers_g1: vec![G1Affine::one(); TAU_POWERS_G1_LENGTH],
+            tau_powers_g2: vec![G2Affine::one(); TAU_POWERS_LENGTH],
+            alpha_tau_powers_g1: vec![G1Affine::one(); TAU_POWERS_LENGTH],
+            beta_tau_powers_g1: vec![G1Affine::one(); TAU_POWERS_LENGTH],
+            beta_g2: G2Affine::one()
+        })
+    }
 
-    // // Load the response's accumulator
-    // let new_accumulator = Accumulator::deserialize(&mut response_reader, UseCompression::Yes, CheckForCorrectness::Yes)
-    //                                               .expect("wasn't able to deserialize the response file's accumulator");
+    println!("Started deserializing...");
+    // Load the response's accumulator
+    let new_accumulator = Accumulator::deserialize(&mut response_reader, UseCompression::Yes, CheckForCorrectness::Yes)
+                                                  .expect("wasn't able to deserialize the response file's accumulator");
 
-    //                                                   // Create new_challenge file
-    // let writer = OpenOptions::new()
-    // .read(false)
-    // .write(true)
-    // .create_new(true)
-    // .open("my-response-uncompr-5").expect("unable to create `./my-response-uncompr-5`");
+    println!("Done deserializing...");
+    // Create new_challenge file
+    let writer = OpenOptions::new()
+    .read(false)
+    .write(true)
+    .create_new(true)
+    .open(file_out).expect("unable to create `./final-response-uncompr-21`");
 
-    // let mut writer = BufWriter::new(writer);
-    // new_accumulator.serialize(&mut writer, UseCompression::No)
-    //                 .expect("wasn't able to deserialize the response file's accumulator");
+    let mut writer = BufWriter::new(writer);
+    println!("Started serializing...");
+    new_accumulator.serialize(&mut writer, UseCompression::No)
+                    .expect("wasn't able to deserialize the response file's accumulator");
+    println!("Done serializing...");
 
     // println!("{:?}", new_accumulator);
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -525,7 +533,6 @@ mod tests {
     //         powers_of_g: ark_std::borrow::Cow::Owned(phase1.coeffs_g1.to_vec()),
     //         powers_of_gamma_g: ark_std::borrow::Cow::Owned(phase1.alpha_coeffs_g1),
     //     };
-
     //     let rng = &mut test_rng();
     //     for _ in 0..10 {
     //         let mut degree = 0;
@@ -545,7 +552,6 @@ mod tests {
     //             let point = E::Fr::rand(rng);
     //             let value = p.evaluate(&point);
     //             let proof = KZG10::<Bls12_381, UniPoly_381>::open(&ck, &p, point, &rand)?;
-
     //             assert!(KZG10::<Bls12_381, UniPoly_381>::check(&vk, &comm, point, value, &proof)?);
     //             comms.push(comm);
     //             values.push(value);
@@ -567,7 +573,7 @@ mod tests {
 
     #[test]
     fn end_to_end_test_powersoftau() -> Result<(), Error> {
-        let params = load_powersoftau_accum(5).unwrap();
+        let params = load_powersoftau_accum(21).unwrap();
         println!("loaded powersoftau");
 
         let powersoftau = Powers::<Bls12_381> {
@@ -620,13 +626,6 @@ mod tests {
         Ok(())
     }
 
-    // #[test]
-    // fn linear_polynomial_test() {
-    //     // linear_polynomial_test_template::<Bls12_377, UniPoly_377>()
-    //         // .expect("test failed for bls12-377");
-    //     linear_polynomial_test_template::<Bls12_381, UniPoly_381>()
-    //         .expect("test failed for bls12-381");
-    // }
     // #[test]
     // fn batch_check_test() {
     //     // batch_check_test_template::<Bls12_377, UniPoly_377>().expect("test failed for bls12-377");
