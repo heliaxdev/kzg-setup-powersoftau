@@ -575,52 +575,28 @@ mod tests {
 
     #[test]
     fn end_to_end_test_powersoftau() -> Result<(), Error> {
-        const exp: usize = 10;
+        const exp: usize = 21;
         const TAU_POWERS_LENGTH: usize = 1 << exp;
         const TAU_POWERS_G1_LENGTH: usize = (TAU_POWERS_LENGTH << 1) - 1;
 
-        // LOAD KZG SETUP
-        // let reader = OpenOptions::new()
-        // .read(true)
-        // .open(format!("./kzg_setup-{}" ,exp)).expect("unable to open `./kzg_setup`");
-
+        // Load KZG setup params
         let reader = File::open(format!("kzg_setup-{}", exp)).unwrap();    
         let mut reader = BufReader::new(reader);
         let mut powers_of_g = Vec::<ArkG1Affine>::with_capacity(TAU_POWERS_G1_LENGTH);
         let mut powers_of_gamma_g = Vec::<ArkG1Affine>::with_capacity(TAU_POWERS_LENGTH);
-        for i in 0..TAU_POWERS_G1_LENGTH {
-            println!("loading g[{}]", i);
-            powers_of_g.push(ArkG1Affine::deserialize/*_uncompressed*/(&mut reader).unwrap());
+        for _ in 0..TAU_POWERS_G1_LENGTH {
+            powers_of_g.push(ArkG1Affine::deserialize_uncompressed(&mut reader).unwrap());
         }
-        // for g in &mut powers_of_gamma_g {
-        for i in 0..TAU_POWERS_LENGTH {
-            println!("loading gamma_g[{}]", i);
-            powers_of_gamma_g.push(ArkG1Affine::deserialize/*_uncompressed*/(&mut reader).unwrap());
+        for _ in 0..TAU_POWERS_LENGTH {
+            powers_of_gamma_g.push(ArkG1Affine::deserialize_uncompressed(&mut reader).unwrap());
         }
 
         let powersoftau = Powers::<Bls12_381> {
             powers_of_g: ark_std::borrow::Cow::Owned(powers_of_g),
             powers_of_gamma_g: ark_std::borrow::Cow::Owned(powers_of_gamma_g),
         };
-        // println!("{:?}", powersoftau);
 
-        let g = ArkG1Affine::deserialize(&mut reader).unwrap();
-        let gamma_g = ArkG1Affine::deserialize(&mut reader).unwrap();
-        let h = ArkG2Affine::deserialize(&mut reader).unwrap();
-        let beta_h = ArkG2Affine::deserialize(&mut reader).unwrap();
-
-        let vk: VerifierKey<Bls12_381> = VerifierKey {
-            g: g,
-            gamma_g: gamma_g,
-            h: h,
-            beta_h: beta_h,
-            prepared_h: h.into(),
-            prepared_beta_h: beta_h.into()
-        };
-
-        // let vk: VerifierKey<Bls12_381> = VerifierKey::<Bls12_381>::deserialize(reader).unwrap();
-
-        //////////////////////////////////////////////////////////////////////////
+        let vk: VerifierKey<Bls12_381> = VerifierKey::<Bls12_381>::deserialize_uncompressed(reader).unwrap();
 
         // let params = load_powersoftau_accum(exp as u32).unwrap();
         // println!("loaded powersoftau");
@@ -645,11 +621,7 @@ mod tests {
                 // degree = usize::rand(rng) % 20;
                 degree = usize::rand(rng) % 10;
             }
-            degree = exp as usize;
-            println!("degree = {:?}", degree);
-
-            // let kzg_pp = KZG10::<Bls12_381, UniPoly_381>::setup(degree, false, rng)?;
-            // let (kzg_ck, kzg_vk) = trim(&kzg_pp, degree)?;
+            /* todo remove: */ degree = exp as usize;
 
             let p = UniPoly_381::rand(degree, rng);
             let hiding_bound = Some(1);
@@ -677,21 +649,16 @@ mod tests {
         // println!("g:");
         // for g in powersoftau.powers_of_g.iter() {
         //     println!("{:?}", g);
-        //     g.serialize(&buffer).unwrap();
+        //     g.serialize_uncompressed(&buffer).unwrap();
         // }
         // println!("gamma_g:");
         // for g in powersoftau.powers_of_gamma_g.iter() {
         //     println!("{:?}", g);
-        //     g.serialize(&buffer).unwrap();
+        //     g.serialize_uncompressed(&buffer).unwrap();
         // }
         // println!("vk = {:?}", vk);
 
-        // vk.g.serialize(&buffer).unwrap();
-        // vk.gamma_g.serialize(&buffer).unwrap();
-        // vk.h.serialize(&buffer).unwrap();
-        // vk.beta_h.serialize(&buffer).unwrap();
-
-        // vk.serialize(buffer).unwrap();
+        // vk.serialize_uncompressed(buffer).unwrap();
 
         Ok(())
     }
