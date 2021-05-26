@@ -4,9 +4,9 @@ use pairing::{
     EncodedPoint,
 };
 use ark_bls12_381::Bls12_381;
-use ark_poly_commit::kzg10::Powers;
+use ark_poly_commit::kzg10::{Powers, VerifierKey};
 use ark_ec::PairingEngine;
-use ark_serialize::{CanonicalDeserialize, SerializationError};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError};
 type ArkG1Affine = <ark_ec::bls12::Bls12<ark_bls12_381::Parameters> as PairingEngine>::G1Affine;
 type ArkG2Affine = <ark_ec::bls12::Bls12<ark_bls12_381::Parameters> as PairingEngine>::G2Affine;
 type ArkG1Prepared = <ark_ec::bls12::Bls12<ark_bls12_381::Parameters> as PairingEngine>::G1Prepared;
@@ -150,8 +150,8 @@ fn load_powersoftau_accum(exp: u32) -> io::Result<PowersOfTau> {
     let m = 2_usize.pow(exp);
     println!("exp = {:?}", exp);
     println!("m = {:?}", m);
-    let f = match File::open("./final-response") {
-    // let f = match File::open(format!("./my-response-uncompr-{}", exp)) {
+    // let f = match File::open("./final-response-uncompr-21") {
+    let f = match File::open(format!("./my-response-uncompr-{}", exp)) {
     // let f = match File::open(format!("../phase1radix2m{}", exp)) {
         Ok(f) => f,
         Err(e) => {
@@ -160,8 +160,8 @@ fn load_powersoftau_accum(exp: u32) -> io::Result<PowersOfTau> {
     };
     let f = &mut BufReader::with_capacity(1024 * 1024, f);
 
-    // let TAU_POWERS_LENGTH: usize = 1 << exp;
-    let TAU_POWERS_LENGTH: usize = 1 << 21;
+    let TAU_POWERS_LENGTH: usize = 1 << exp;
+    // let TAU_POWERS_LENGTH: usize = 1 << 21;
     let TAU_POWERS_G1_LENGTH: usize = (TAU_POWERS_LENGTH << 1) - 1;
 
     let mut tau_powers_g1 = Vec::with_capacity(TAU_POWERS_G1_LENGTH);
@@ -302,10 +302,14 @@ fn main() {
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    use powersoftau::{Accumulator, UseCompression, CheckForCorrectness, HashReader ,ACCUMULATOR_BYTE_SIZE, CONTRIBUTION_BYTE_SIZE, DeserializationError};
+    use powersoftau::{Accumulator, UseCompression, CheckForCorrectness, HashReader,
+        ACCUMULATOR_BYTE_SIZE,
+        CONTRIBUTION_BYTE_SIZE, 
+        DeserializationError};
 
-    let file = "./final-response";
-    let file_out = "./final-response-uncompr-21";
+    // let CONTRIBUTION_BYTE_SIZE = 603981040;
+    let file = "./my-response-21";
+    let file_out = "./my-response-uncompr-21";
     let exp = 21;
 
     // Try to load `./response` from disk.
@@ -355,7 +359,7 @@ fn main() {
 
     println!("Started deserializing...");
     // Load the response's accumulator
-    let new_accumulator = Accumulator::deserialize(&mut response_reader, UseCompression::Yes, CheckForCorrectness::Yes)
+    let new_accumulator = Accumulator::deserialize(&mut response_reader, UseCompression::Yes, CheckForCorrectness::No)
                                                   .expect("wasn't able to deserialize the response file's accumulator");
 
     println!("Done deserializing...");
@@ -372,8 +376,6 @@ fn main() {
                     .expect("wasn't able to deserialize the response file's accumulator");
     println!("Done serializing...");
 
-    // println!("{:?}", new_accumulator);
-    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 }
 
 #[cfg(test)]
@@ -383,6 +385,7 @@ mod tests {
     use ark_bls12_377::FQ2_ONE;
     use ark_bls12_381::Bls12_381;
     use ark_bls12_381::Fr;
+    use ark_ec::short_weierstrass_jacobian::GroupAffine;
     use ark_ec::{PairingEngine, bls12::G2Prepared};
     use ark_ff::{UniformRand, Zero};
     use ark_poly::univariate::DensePolynomial as DensePoly;
@@ -391,6 +394,7 @@ mod tests {
     use ark_poly_commit::PCCommitment;
     use ark_poly_commit::UVPolynomial;
     use ark_poly_commit::Polynomial;
+    use ark_serialize::CanonicalSerialize;
     use ark_std::{rand::RngCore, test_rng};
     use bellman::groth16::Parameters;
 
@@ -431,45 +435,40 @@ mod tests {
         type E = ark_bls12_381::Bls12_381;
     }
 
-    #[test]
-    fn test_phase1() {
-        let rng = &mut test_rng();
-        let phase1 = load_phase1(4).unwrap();
-        let degree = 2_usize.pow(4);
-        use ark_ff::One;
-        let one = ArkFqk::one();
+    // #[test]
+    // fn test_phase1() {
+    //     let rng = &mut test_rng();
+    //     let phase1 = load_phase1(4).unwrap();
+    //     let degree = 2_usize.pow(4);
+    //     use ark_ff::One;
+    //     let one = ArkFqk::one();
 
-        for i in 0..phase1.coeffs_g1.len()-1 {
-            let a: ArkG1Prepared = (-phase1.coeffs_g1[i]).into();
-            let b = phase1.coeffs_g2[i+1].into();
-            let c = phase1.coeffs_g1[i+1].into();
-            let d = phase1.coeffs_g2[i].into();
-            let p = Bls12_381::product_of_pairings(&[(a, b), (c, d)]);
-            assert!(p == one);
-        }
+    //     for i in 0..phase1.coeffs_g1.len()-1 {
+    //         let a: ArkG1Prepared = (-phase1.coeffs_g1[i]).into();
+    //         let b = phase1.coeffs_g2[i+1].into();
+    //         let c = phase1.coeffs_g1[i+1].into();
+    //         let d = phase1.coeffs_g2[i].into();
+    //         let p = Bls12_381::product_of_pairings(&[(a, b), (c, d)]);
+    //         assert!(p == one);
+    //     }
 
-        let pp = KZG10::<Bls12_381, UniPoly_381>::setup(degree, false, rng).unwrap();
+    //     let pp = KZG10::<Bls12_381, UniPoly_381>::setup(degree, false, rng).unwrap();
 
-        for i in 0..pp.powers_of_g.len()-1 {
-            let a: ArkG1Prepared = (-pp.powers_of_g[i]).into();
-            let b = pp.beta_h.into();
-            let c = pp.powers_of_g[i+1].into();
-            let d = pp.h.into();
-            let p = Bls12_381::product_of_pairings(&[(a, b), (c, d)]);
-            assert!(p == one);
-            println!("{:?}", p == one);
-        }
-
-        // phase1.alpha
-        // phase1.alpha_coeffs_g1
-        // phase1.beta_coeffs_g1
-        // phase1.beta_g1
-        // phase1.beta_g2
-    }
+    //     for i in 0..pp.powers_of_g.len()-1 {
+    //         let a: ArkG1Prepared = (-pp.powers_of_g[i]).into();
+    //         let b = pp.beta_h.into();
+    //         let c = pp.powers_of_g[i+1].into();
+    //         let d = pp.h.into();
+    //         let p = Bls12_381::product_of_pairings(&[(a, b), (c, d)]);
+    //         assert!(p == one);
+    //         println!("{:?}", p == one);
+    //     }
+    // }
 
 
-    fn end_to_end_test_template() -> Result<(), Error> {
-        let phase1 = load_phase1(10).unwrap();
+    fn end_to_end_test_template() -> Result<(), Error> {     
+        let exp:usize = 5;
+        let phase1 = load_phase1(exp as u32).unwrap();
         println!("loaded phase1");
         let powersoftau = Powers::<Bls12_381> {
             powers_of_g: ark_std::borrow::Cow::Owned(phase1.coeffs_g1.to_vec()),
@@ -493,7 +492,7 @@ mod tests {
                 // degree = usize::rand(rng) % 20;
                 degree = usize::rand(rng) % 10;
             }
-            println!("degree = {:?}", degree);
+            degree = exp;
 
             // let kzg_pp = KZG10::<Bls12_381, UniPoly_381>::setup(degree, false, rng)?;
             // let (kzg_ck, kzg_vk) = trim(&kzg_pp, degree)?;
@@ -522,58 +521,10 @@ mod tests {
         Ok(())
     }
 
-    // fn batch_check_test_template<E, P>() -> Result<(), Error>
-    // where
-    //     E: PairingEngine,
-    //     P: UVPolynomial<E::Fr, Point = E::Fr>,
-    //     for<'a, 'b> &'a P: Div<&'b P, Output = P>,
-    // {
-    //     let phase1 = load_phase1(4).unwrap();
-    //     let powersoftau = Powers::<Bls12_381> {
-    //         powers_of_g: ark_std::borrow::Cow::Owned(phase1.coeffs_g1.to_vec()),
-    //         powers_of_gamma_g: ark_std::borrow::Cow::Owned(phase1.alpha_coeffs_g1),
-    //     };
-    //     let rng = &mut test_rng();
-    //     for _ in 0..10 {
-    //         let mut degree = 0;
-    //         while degree <= 1 {
-    //             degree = usize::rand(rng) % 20;
-    //         }
-    //         let pp = KZG10::<Bls12_381, UniPoly_381>::setup(degree, false, rng)?;
-    //         let (ck, vk) = trim::<E, P>(&pp, degree)?;
-    //         let mut comms = Vec::new();
-    //         let mut values = Vec::new();
-    //         let mut points = Vec::new();
-    //         let mut proofs = Vec::new();
-    //         for _ in 0..10 {
-    //             let p = P::rand(degree, rng);
-    //             let hiding_bound = Some(1);
-    //             let (comm, rand) = KZG10::<Bls12_381, UniPoly_381>::commit(&ck, &p, hiding_bound, Some(rng))?;
-    //             let point = E::Fr::rand(rng);
-    //             let value = p.evaluate(&point);
-    //             let proof = KZG10::<Bls12_381, UniPoly_381>::open(&ck, &p, point, &rand)?;
-    //             assert!(KZG10::<Bls12_381, UniPoly_381>::check(&vk, &comm, point, value, &proof)?);
-    //             comms.push(comm);
-    //             values.push(value);
-    //             points.push(point);
-    //             proofs.push(proof);
-    //         }
-    //         assert!(KZG10::<Bls12_381, UniPoly_381>::batch_check(
-    //             &vk, &comms, &points, &values, &proofs, rng
-    //         )?);
-    //     }
-    //     Ok(())
-    // }
-
-    // #[test]
-    // fn end_to_end_test() {
-    //     // end_to_end_test_template::<Bls12_377, UniPoly_377>().expect("test failed for bls12-377");
-    //     end_to_end_test_template().expect("test failed for bls12-381");
-    // }
-
-    #[test]
-    fn end_to_end_test_powersoftau() -> Result<(), Error> {
-        let params = load_powersoftau_accum(21).unwrap();
+    fn batch_check_test_template() -> Result<(), Error>
+    {
+        let exp = 21;
+        let params = load_powersoftau_accum(exp).unwrap();
         println!("loaded powersoftau");
 
         let powersoftau = Powers::<Bls12_381> {
@@ -591,24 +542,122 @@ mod tests {
         };
 
         let rng = &mut test_rng();
-        for _ in 0..100 {
+        for _ in 0..10 {
+            let mut degree = 0;
+            while degree <= 1 {
+                degree = usize::rand(rng) % 20;
+            }
+            // let pp = KZG10::<Bls12_381, UniPoly_381>::setup(degree, false, rng)?;
+            // let (ck, vk) = trim::<E, P>(&pp, degree)?;
+            let mut comms = Vec::new();
+            let mut values = Vec::new();
+            let mut points = Vec::new();
+            let mut proofs = Vec::new();
+            for _ in 0..10 {
+                let p = UniPoly_381::rand(degree, rng);
+                let hiding_bound = Some(1);
+                let (comm, rand) = KZG10::<Bls12_381, UniPoly_381>::commit(&powersoftau, &p, hiding_bound, Some(rng))?;
+                let point = <ark_ec::bls12::Bls12<ark_bls12_381::Parameters> as PairingEngine>::Fr::rand(rng);
+                let value = p.evaluate(&point);
+                let proof = KZG10::<Bls12_381, UniPoly_381>::open(&powersoftau, &p, point, &rand)?;
+                assert!(KZG10::<Bls12_381, UniPoly_381>::check(&vk, &comm, point, value, &proof)?);
+                comms.push(comm);
+                values.push(value);
+                points.push(point);
+                proofs.push(proof);
+            }
+            assert!(KZG10::<Bls12_381, UniPoly_381>::batch_check(
+                &vk, &comms, &points, &values, &proofs, rng
+            )?);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn end_to_end_test_powersoftau() -> Result<(), Error> {
+        const exp: usize = 10;
+        const TAU_POWERS_LENGTH: usize = 1 << exp;
+        const TAU_POWERS_G1_LENGTH: usize = (TAU_POWERS_LENGTH << 1) - 1;
+
+        // LOAD KZG SETUP
+        // let reader = OpenOptions::new()
+        // .read(true)
+        // .open(format!("./kzg_setup-{}" ,exp)).expect("unable to open `./kzg_setup`");
+
+        let reader = File::open(format!("kzg_setup-{}", exp)).unwrap();    
+        let mut reader = BufReader::new(reader);
+        let mut powers_of_g = Vec::<ArkG1Affine>::with_capacity(TAU_POWERS_G1_LENGTH);
+        let mut powers_of_gamma_g = Vec::<ArkG1Affine>::with_capacity(TAU_POWERS_LENGTH);
+        for i in 0..TAU_POWERS_G1_LENGTH {
+            println!("loading g[{}]", i);
+            powers_of_g.push(ArkG1Affine::deserialize/*_uncompressed*/(&mut reader).unwrap());
+        }
+        // for g in &mut powers_of_gamma_g {
+        for i in 0..TAU_POWERS_LENGTH {
+            println!("loading gamma_g[{}]", i);
+            powers_of_gamma_g.push(ArkG1Affine::deserialize/*_uncompressed*/(&mut reader).unwrap());
+        }
+
+        let powersoftau = Powers::<Bls12_381> {
+            powers_of_g: ark_std::borrow::Cow::Owned(powers_of_g),
+            powers_of_gamma_g: ark_std::borrow::Cow::Owned(powers_of_gamma_g),
+        };
+        // println!("{:?}", powersoftau);
+
+        let g = ArkG1Affine::deserialize(&mut reader).unwrap();
+        let gamma_g = ArkG1Affine::deserialize(&mut reader).unwrap();
+        let h = ArkG2Affine::deserialize(&mut reader).unwrap();
+        let beta_h = ArkG2Affine::deserialize(&mut reader).unwrap();
+
+        let vk: VerifierKey<Bls12_381> = VerifierKey {
+            g: g,
+            gamma_g: gamma_g,
+            h: h,
+            beta_h: beta_h,
+            prepared_h: h.into(),
+            prepared_beta_h: beta_h.into()
+        };
+
+        // let vk: VerifierKey<Bls12_381> = VerifierKey::<Bls12_381>::deserialize(reader).unwrap();
+
+        //////////////////////////////////////////////////////////////////////////
+
+        // let params = load_powersoftau_accum(exp as u32).unwrap();
+        // println!("loaded powersoftau");
+        // let powersoftau = Powers::<Bls12_381> {
+        //     powers_of_g: ark_std::borrow::Cow::Owned(params.tau_powers_g1.to_vec()),
+        //     powers_of_gamma_g: ark_std::borrow::Cow::Owned(params.alpha_tau_powers_g1.to_vec()),
+        // };
+
+        // let vk = VerifierKey {
+        //     g: powersoftau.powers_of_g[0],
+        //     gamma_g: powersoftau.powers_of_gamma_g[0],
+        //     h: params.tau_powers_g2[0],
+        //     beta_h: params.tau_powers_g2[1],
+        //     prepared_h: params.tau_powers_g2[0].into(),
+        //     prepared_beta_h: params.tau_powers_g2[1].into(),
+        // };
+
+        let rng = &mut test_rng();
+        // for _ in 0..100 {
             let mut degree = 0;
             while degree <= 1 {
                 // degree = usize::rand(rng) % 20;
                 degree = usize::rand(rng) % 10;
             }
+            degree = exp as usize;
             println!("degree = {:?}", degree);
 
             // let kzg_pp = KZG10::<Bls12_381, UniPoly_381>::setup(degree, false, rng)?;
             // let (kzg_ck, kzg_vk) = trim(&kzg_pp, degree)?;
 
             let p = UniPoly_381::rand(degree, rng);
-            let hiding_bound = Some(1); //None;
+            let hiding_bound = Some(1);
             let (comm, rand) = KZG10::<Bls12_381, UniPoly_381>::commit(
                 &powersoftau,
                 &p,
                 hiding_bound,
-                Some(rng), // None,
+                Some(rng),
             )?;
             let point =
                 <ark_ec::bls12::Bls12<ark_bls12_381::Parameters> as PairingEngine>::Fr::rand(rng);
@@ -622,13 +671,40 @@ mod tests {
                 p.degree(),
                 hiding_bound,
             );
-        }
+        // }
+
+        // let buffer = File::create(format!("kzg_setup-{}", exp)).unwrap();
+        // println!("g:");
+        // for g in powersoftau.powers_of_g.iter() {
+        //     println!("{:?}", g);
+        //     g.serialize(&buffer).unwrap();
+        // }
+        // println!("gamma_g:");
+        // for g in powersoftau.powers_of_gamma_g.iter() {
+        //     println!("{:?}", g);
+        //     g.serialize(&buffer).unwrap();
+        // }
+        // println!("vk = {:?}", vk);
+
+        // vk.g.serialize(&buffer).unwrap();
+        // vk.gamma_g.serialize(&buffer).unwrap();
+        // vk.h.serialize(&buffer).unwrap();
+        // vk.beta_h.serialize(&buffer).unwrap();
+
+        // vk.serialize(buffer).unwrap();
+
         Ok(())
     }
 
     // #[test]
+    // fn end_to_end_test() {
+    //    // end_to_end_test_template::<Bls12_377, UniPoly_377>().expect("test failed for bls12-377");
+        // end_to_end_test_template().expect("test failed for bls12-381");
+    // }
+
+    // #[test]
     // fn batch_check_test() {
     //     // batch_check_test_template::<Bls12_377, UniPoly_377>().expect("test failed for bls12-377");
-    //     batch_check_test_template::<Bls12_381, UniPoly_381>().expect("test failed for bls12-381");
+    //     batch_check_test_template().expect("test failed for bls12-381");
     // }
 }
