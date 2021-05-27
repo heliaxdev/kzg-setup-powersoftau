@@ -40,14 +40,17 @@ pub fn download_parameters() -> Result<(), minreq::Error> {
     }
 
     if Path::new(POWERSOFTAU_FILE).exists() {
+        println!("Checking existing {} file...", POWERSOFTAU_FILE);
         let mut f = File::open(POWERSOFTAU_FILE)?;
         let mut buffer = Vec::new();
         f.read_to_end(&mut buffer)?;
         if check_file_hash(&buffer) {
+            println!("Checking passed, using existing {} file.", POWERSOFTAU_FILE);
             return Ok(());
         }
-    } 
+    }
 
+    println!("Downloading {}", DOWNLOAD_URL);
     let powersoftau = minreq::get(DOWNLOAD_URL).send()?;
     if !check_file_hash(powersoftau.as_bytes()) {
         return Err(io::Error::new(
