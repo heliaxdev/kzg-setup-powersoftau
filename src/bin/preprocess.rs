@@ -35,8 +35,7 @@ pub fn download_parameters() -> Result<(), minreq::Error> {
         .update(data)
         .finalize()
         .to_hex();
-        
-        &hash != POWERSOFTAU_DIGEST
+        &hash == POWERSOFTAU_DIGEST
     }
 
     if Path::new(POWERSOFTAU_FILE).exists() {
@@ -128,7 +127,7 @@ fn powersoftau_uncompress() {
 
     println!("Started deserializing compressed Powers of Tau...");
     // Load the response's accumulator
-    let new_accumulator = Accumulator::deserialize(&mut response_reader, UseCompression::No, CheckForCorrectness::No)
+    let new_accumulator = Accumulator::deserialize(&mut response_reader, UseCompression::Yes, CheckForCorrectness::No)
                                                   .expect("wasn't able to deserialize the response file's accumulator");
 
     println!("Done deserializing.");
