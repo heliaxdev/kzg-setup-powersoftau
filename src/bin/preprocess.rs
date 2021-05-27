@@ -1,3 +1,4 @@
+use std::io::Write;
 use std::{fs::{File, OpenOptions}, io::{self, BufReader, BufWriter, Read}};
 use ark_bls12_381::Bls12_381;
 use ark_ec::PairingEngine;
@@ -24,43 +25,46 @@ struct PowersOfTau {
     tau_powers_g1: Vec<ArkG1Affine>,
     tau_powers_g2: Vec<ArkG2Affine>,
     alpha_tau_powers_g1: Vec<ArkG1Affine>,
-    // beta_tau_powers_g1: Vec<ArkG1Affine>,
-    // beta_g2: ArkG2Affine,
 }
 
+use std::path::Path;
 pub fn download_parameters() -> Result<(), minreq::Error> {
-    // let fetch_params = |expected_hash: &str| -> Result<(), minreq::Error> {
-        use std::io::Write;
 
-        let part_1 = minreq::get(DOWNLOAD_URL).send()?;
-
-        // Verify parameter file hash.
+    fn check_file_hash(data: &[u8]) -> bool {
         let hash = blake2b_simd::State::new()
-            .update(part_1.as_bytes())
-            .finalize()
-            .to_hex();
-        if &hash != POWERSOFTAU_DIGEST {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!(
-                    "failed validation (expected: {}, actual: {}, fetched {} bytes)",
-                    POWERSOFTAU_DIGEST,
-                    hash,
-                    part_1.as_bytes().len()
-                ),
-            )
-            .into());
+        .update(data)
+        .finalize()
+        .to_hex();
+        
+        &hash != POWERSOFTAU_DIGEST
+    }
+
+    if Path::new(POWERSOFTAU_FILE).exists() {
+        let mut f = File::open(POWERSOFTAU_FILE)?;
+        let mut buffer = Vec::new();
+        f.read_to_end(&mut buffer)?;
+        if check_file_hash(&buffer) {
+            return Ok(());
         }
+    } 
 
-        // Write parameter file.
-        let mut f = File::create(POWERSOFTAU_FILE)?;
-        f.write_all(part_1.as_bytes())?;
-        Ok(())
-    // };
+    let powersoftau = minreq::get(DOWNLOAD_URL).send()?;
+    if !check_file_hash(powersoftau.as_bytes()) {
+        return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!(
+                        "failed validation (expected: {}, fetched {} bytes)",
+                        POWERSOFTAU_DIGEST,
+                        powersoftau.as_bytes().len()
+                    ),
+                )
+                .into());
+    }
 
-    // fetch_params(POWERSOFTAU_DIGEST)?;
-
-    // Ok(())
+    // Write parameter file.
+    let mut f = File::create(POWERSOFTAU_FILE)?;
+    f.write_all(powersoftau.as_bytes())?;
+    return Ok(());
 }
 
 fn read_g1(reader: &mut BufReader<File>) -> Result<ArkG1Affine, SerializationError> {
@@ -121,7 +125,7 @@ fn powersoftau_uncompress() {
 
     println!("Started deserializing compressed Powers of Tau...");
     // Load the response's accumulator
-    let new_accumulator = Accumulator::deserialize(&mut response_reader, UseCompression::Yes, CheckForCorrectness::No)
+    let new_accumulator = Accumulator::deserialize(&mut response_reader, UseCompression::No, CheckForCorrectness::No)
                                                   .expect("wasn't able to deserialize the response file's accumulator");
 
     println!("Done deserializing.");
@@ -140,10 +144,10 @@ fn powersoftau_uncompress() {
 }
 
 fn load_powersoftau_accumulator() -> io::Result<PowersOfTau> {
-    let f = match File::open(POWERSOFTAU_FILE) {
+    let f = match File::open(POWERSOFTAU_UNCOMPRESSED_FILE) {
         Ok(f) => f,
         Err(e) => {
-            panic!("Couldn't load {}. Error: {}", POWERSOFTAU_FILE, e);
+            panic!("Couldn't load {}. Error: {}", POWERSOFTAU_UNCOMPRESSED_FILE, e);
         }
     };
     let f = &mut BufReader::with_capacity(1024 * 1024, f);
@@ -163,19 +167,10 @@ fn load_powersoftau_accumulator() -> io::Result<PowersOfTau> {
         alpha_tau_powers_g1.push(read_g1(f).unwrap());
     }
 
-    // let mut beta_tau_powers_g1 = Vec::with_capacity(TAU_POWERS_LENGTH);
-    // for _ in 0..TAU_POWERS_LENGTH {
-    //     beta_tau_powers_g1.push(read_g1(f).unwrap());
-    // }
-
-    // let beta_g2 = read_g2(f).unwrap();
-
     Ok(PowersOfTau {
         tau_powers_g1: tau_powers_g1,
         tau_powers_g2: tau_powers_g2,
         alpha_tau_powers_g1: alpha_tau_powers_g1,
-        // beta_tau_powers_g1: beta_tau_powers_g1,
-        // beta_g2: beta_g2
     })
 }
 
