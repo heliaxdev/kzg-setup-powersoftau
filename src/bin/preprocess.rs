@@ -1,4 +1,4 @@
-use std::{fs::File, io::{self, BufReader, BufWriter, Read}};
+use std::{fs::File, io::{self, BufReader, Read}};
 use ark_bls12_381::Bls12_381;
 use ark_ec::PairingEngine;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError};
@@ -8,9 +8,13 @@ use pairing::{
 };
 use ark_poly_commit::kzg10::{Powers, VerifierKey};
 
-
 type ArkG1Affine = <ark_ec::bls12::Bls12<ark_bls12_381::Parameters> as PairingEngine>::G1Affine;
 type ArkG2Affine = <ark_ec::bls12::Bls12<ark_bls12_381::Parameters> as PairingEngine>::G2Affine;
+
+const POWERSOFTAU_FILE: &str = "powersoftau";
+const PARAMS_FILE: &str = "kzg_setup";
+const TAU_POWERS_LENGTH: usize = 1 << 21;
+const TAU_POWERS_G1_LENGTH: usize = (TAU_POWERS_LENGTH << 1) - 1;
 
 struct PowersOfTau {
     tau_powers_g1: Vec<ArkG1Affine>,
@@ -20,13 +24,13 @@ struct PowersOfTau {
     beta_g2: ArkG2Affine,
 }
 
-pub fn download_parameters(exp: String) -> Result<(), minreq::Error> {
-    const DOWNLOAD_URL: &str = "https://download.z.cash/downloads/powersoftau/";
+pub fn download_parameters() -> Result<(), minreq::Error> {
+    const DOWNLOAD_URL: &str = "https://powersoftau-transcript.s3-us-west-2.amazonaws.com/88dc1dc6914e44568e8511eace177e6ecd9da9a9bd8f67e4c0c9f215b517db4d1d54a755d051978dbb85ef947918193c93cd4cf4c99c0dc5a767d4eeb10047a4";
 
-    let fetch_params = |exp: String, expected_hash: &str| -> Result<(), minreq::Error> {
+    let fetch_params = |expected_hash: &str| -> Result<(), minreq::Error> {
         use std::io::Write;
 
-        let part_1 = minreq::get(format!("{}/phase1radix2m{}", DOWNLOAD_URL, exp)).send()?;
+        let part_1 = minreq::get(DOWNLOAD_URL).send()?;
 
         // TODO
         // // Verify parameter file hash.
@@ -49,19 +53,19 @@ pub fn download_parameters(exp: String) -> Result<(), minreq::Error> {
         // }
 
         // Write parameter file.
-        let mut f = File::create(format!("./phase1radix2m{}", exp))?;
+        let mut f = File::create(POWERSOFTAU_FILE)?;
         f.write_all(part_1.as_bytes())?;
         Ok(())
     };
 
-    fetch_params(exp, "")?;
+    fetch_params("")?;
 
     Ok(())
 }
 
 fn read_g1(reader: &mut BufReader<File>) -> Result<ArkG1Affine, SerializationError> {
     let mut repr = G1Uncompressed::empty();
-    reader.read_exact(repr.as_mut()).unwrap(); //?;
+    reader.read_exact(repr.as_mut()).unwrap();
 
     let repr_bytes = repr.as_mut();
     let mut repr_bytes_vec: Vec<u8> = vec![];
@@ -76,7 +80,7 @@ fn read_g1(reader: &mut BufReader<File>) -> Result<ArkG1Affine, SerializationErr
 
 fn read_g2(reader: &mut BufReader<File>) -> Result<ArkG2Affine, SerializationError> {
     let mut repr = G2Uncompressed::empty();
-    reader.read_exact(repr.as_mut()).unwrap(); //?;
+    reader.read_exact(repr.as_mut()).unwrap();
 
     let repr_bytes = repr.as_mut();
     let mut repr_bytes_vec: Vec<u8> = vec![];
@@ -100,42 +104,33 @@ fn read_g2(reader: &mut BufReader<File>) -> Result<ArkG2Affine, SerializationErr
     repr_new
 }
 
-fn load_powersoftau_accum(exp: u32) -> io::Result<PowersOfTau> {
-    let m = 2_usize.pow(exp);
-    println!("exp = {:?}", exp);
-    println!("m = {:?}", m);
-    // let f = match File::open("./final-response-uncompr-21") {
-    let f = match File::open(format!("./my-response-uncompr-{}", exp)) {
-    // let f = match File::open(format!("../phase1radix2m{}", exp)) {
+fn load_powersoftau_accum() -> io::Result<PowersOfTau> {
+    let f = match File::open(POWERSOFTAU_FILE) {
         Ok(f) => f,
         Err(e) => {
-            panic!("Couldn't load phase1radix2m{}: {:?}", exp, e);
+            panic!("Couldn't load {}. Error: {}", POWERSOFTAU_FILE, e);
         }
     };
     let f = &mut BufReader::with_capacity(1024 * 1024, f);
 
-    let TAU_POWERS_LENGTH: usize = 1 << exp;
-    // let TAU_POWERS_LENGTH: usize = 1 << 21;
-    let TAU_POWERS_G1_LENGTH: usize = (TAU_POWERS_LENGTH << 1) - 1;
-
     let mut tau_powers_g1 = Vec::with_capacity(TAU_POWERS_G1_LENGTH);
     for _ in 0..TAU_POWERS_G1_LENGTH {
-        tau_powers_g1.push(read_g1(f).unwrap()); //?);
+        tau_powers_g1.push(read_g1(f).unwrap());
     }
 
     let mut tau_powers_g2 = Vec::with_capacity(TAU_POWERS_LENGTH);
     for _ in 0..TAU_POWERS_LENGTH {
-        tau_powers_g2.push(read_g2(f).unwrap()); //?);
+        tau_powers_g2.push(read_g2(f).unwrap());
     }
 
     let mut alpha_tau_powers_g1 = Vec::with_capacity(TAU_POWERS_LENGTH);
     for _ in 0..TAU_POWERS_LENGTH {
-        alpha_tau_powers_g1.push(read_g1(f).unwrap()); //?);
+        alpha_tau_powers_g1.push(read_g1(f).unwrap());
     }
 
     let mut beta_tau_powers_g1 = Vec::with_capacity(TAU_POWERS_LENGTH);
     for _ in 0..TAU_POWERS_LENGTH {
-        beta_tau_powers_g1.push(read_g1(f).unwrap()); //?);
+        beta_tau_powers_g1.push(read_g1(f).unwrap());
     }
 
     let beta_g2 = read_g2(f).unwrap(); //?;
@@ -150,9 +145,12 @@ fn load_powersoftau_accum(exp: u32) -> io::Result<PowersOfTau> {
 }
 
 fn main() {
-    let exp = 21;
-    let params = load_powersoftau_accum(exp as u32).unwrap();
+    // download_parameters().unwrap();
+    println!("Downloaded Powers of Tau");
+
+    let params = load_powersoftau_accum().unwrap();
     println!("Loaded Powers of Tau");
+
     let powersoftau = Powers::<Bls12_381> {
         powers_of_g: ark_std::borrow::Cow::Owned(params.tau_powers_g1.to_vec()),
         powers_of_gamma_g: ark_std::borrow::Cow::Owned(params.alpha_tau_powers_g1.to_vec()),
@@ -167,7 +165,7 @@ fn main() {
         prepared_beta_h: params.tau_powers_g2[1].into(),
     };
 
-    let buffer = File::create(format!("kzg_setup-{}", exp)).unwrap();
+    let buffer = File::create(PARAMS_FILE).unwrap();
     for g in powersoftau.powers_of_g.iter() {
         g.serialize_uncompressed(&buffer).unwrap();
     }
