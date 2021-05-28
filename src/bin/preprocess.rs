@@ -1,3 +1,4 @@
+use trusted_setup::{KGZ_SETUP_FILE, read_g1, read_g2};
 use std::io::Write;
 use std::{fs::{File, OpenOptions}, io::{self, BufReader, BufWriter, Read}};
 use ark_bls12_381::Bls12_381;
@@ -17,7 +18,6 @@ const DOWNLOAD_URL: &str = "https://powersoftau-transcript.s3-us-west-2.amazonaw
 const POWERSOFTAU_DIGEST: &str = "88dc1dc6914e44568e8511eace177e6ecd9da9a9bd8f67e4c0c9f215b517db4d1d54a755d051978dbb85ef947918193c93cd4cf4c99c0dc5a767d4eeb10047a4";
 const POWERSOFTAU_FILE: &str = "powersoftau";
 const POWERSOFTAU_UNCOMPRESSED_FILE: &str = "powersoftau_uncompressed";
-const PARAMS_FILE: &str = "kzg_setup";
 const TAU_POWERS_LENGTH: usize = 1 << 21;
 const TAU_POWERS_G1_LENGTH: usize = (TAU_POWERS_LENGTH << 1) - 1;
 
@@ -67,47 +67,6 @@ pub fn download_parameters() -> Result<(), minreq::Error> {
     let mut f = File::create(POWERSOFTAU_FILE)?;
     f.write_all(powersoftau.as_bytes())?;
     return Ok(());
-}
-
-fn read_g1(reader: &mut BufReader<File>) -> Result<ArkG1Affine, SerializationError> {
-    let mut repr = G1Uncompressed::empty();
-    reader.read_exact(repr.as_mut()).unwrap();
-
-    let repr_bytes = repr.as_mut();
-    let mut repr_bytes_vec: Vec<u8> = vec![];
-    repr_bytes_vec.extend_from_slice(&repr_bytes[000..=095]);
-
-    repr_bytes_vec[000..=047].reverse();
-    repr_bytes_vec[048..=095].reverse();
-
-    let repr_new = ArkG1Affine::deserialize_unchecked(&repr_bytes_vec[..]);
-    repr_new
-}
-
-fn read_g2(reader: &mut BufReader<File>) -> Result<ArkG2Affine, SerializationError> {
-    let mut repr = G2Uncompressed::empty();
-    reader.read_exact(repr.as_mut()).unwrap();
-
-    let repr_bytes = repr.as_mut();
-    let mut repr_bytes_vec: Vec<u8> = vec![];
-
-    /* 2 */
-    repr_bytes_vec.extend_from_slice(&repr_bytes[048..=095]);
-    /* 1 */
-    repr_bytes_vec.extend_from_slice(&repr_bytes[000..=047]);
-
-    /* 4 */
-    repr_bytes_vec.extend_from_slice(&repr_bytes[144..=191]);
-    /* 3 */
-    repr_bytes_vec.extend_from_slice(&repr_bytes[096..=143]);
-
-    repr_bytes_vec[000..=047].reverse();
-    repr_bytes_vec[048..=095].reverse();
-    repr_bytes_vec[096..=143].reverse();
-    repr_bytes_vec[144..=191].reverse();
-
-    let repr_new = ArkG2Affine::deserialize_unchecked(&repr_bytes_vec[..]);
-    repr_new
 }
 
 fn powersoftau_uncompress() {
@@ -206,7 +165,7 @@ fn main() {
     };
 
     println!("Serializing KZG parameters...");
-    let buffer = File::create(PARAMS_FILE).unwrap();
+    let buffer = File::create(KGZ_SETUP_FILE).unwrap();
     for g in powersoftau.powers_of_g.iter() {
         g.serialize_uncompressed(&buffer).unwrap();
     }
@@ -215,5 +174,5 @@ fn main() {
     }
     vk.serialize_uncompressed(buffer).unwrap();
 
-    println!("Done serializing. KZG parameters are stored in {}", PARAMS_FILE);
+    println!("Done serializing. KZG parameters are stored in {}", KGZ_SETUP_FILE);
 }
