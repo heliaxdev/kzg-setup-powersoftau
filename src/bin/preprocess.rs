@@ -1,11 +1,7 @@
 use ark_bls12_381::Bls12_381;
 use ark_ec::PairingEngine;
 use ark_poly_commit::kzg10::{Powers, VerifierKey};
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError};
-use pairing::{
-    bls12_381::{G1Uncompressed, G2Uncompressed},
-    EncodedPoint,
-};
+use ark_serialize::CanonicalSerialize;
 use powersoftau::{
     Accumulator, CheckForCorrectness, HashReader, UseCompression, CONTRIBUTION_BYTE_SIZE,
 };

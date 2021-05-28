@@ -36,7 +36,7 @@ pub struct Phase1Parameters {
 
 pub fn read_g1(reader: &mut BufReader<File>) -> Result<ArkG1Affine, SerializationError> {
     let mut repr = G1Uncompressed::empty();
-    reader.read_exact(repr.as_mut()).unwrap(); //?;
+    reader.read_exact(repr.as_mut()).unwrap();
 
     let repr_bytes = repr.as_mut();
     let mut repr_bytes_vec: Vec<u8> = vec![];
@@ -51,7 +51,7 @@ pub fn read_g1(reader: &mut BufReader<File>) -> Result<ArkG1Affine, Serializatio
 
 pub fn read_g2(reader: &mut BufReader<File>) -> Result<ArkG2Affine, SerializationError> {
     let mut repr = G2Uncompressed::empty();
-    reader.read_exact(repr.as_mut()).unwrap(); //?;
+    reader.read_exact(repr.as_mut()).unwrap();
 
     let repr_bytes = repr.as_mut();
     let mut repr_bytes_vec: Vec<u8> = vec![];
@@ -85,24 +85,24 @@ pub fn load_phase1(exp: u32) -> io::Result<Phase1Parameters> {
     };
     let f = &mut BufReader::with_capacity(1024 * 1024, f);
 
-    let alpha = read_g1(f).unwrap(); //?;
-    let beta_g1 = read_g1(f).unwrap(); //?;
-    let beta_g2 = read_g2(f).unwrap(); //?;
+    let alpha = read_g1(f).unwrap();
+    let beta_g1 = read_g1(f).unwrap();
+    let beta_g2 = read_g2(f).unwrap();
     let mut coeffs_g1 = Vec::with_capacity(m);
     for _ in 0..m {
-        coeffs_g1.push(read_g1(f).unwrap()); //?);
+        coeffs_g1.push(read_g1(f).unwrap());
     }
     let mut coeffs_g2 = Vec::with_capacity(m);
     for _ in 0..m {
-        coeffs_g2.push(read_g2(f).unwrap()); //?);
+        coeffs_g2.push(read_g2(f).unwrap());
     }
     let mut alpha_coeffs_g1 = Vec::with_capacity(m);
     for _ in 0..m {
-        alpha_coeffs_g1.push(read_g1(f).unwrap()); //?);
+        alpha_coeffs_g1.push(read_g1(f).unwrap());
     }
     let mut beta_coeffs_g1 = Vec::with_capacity(m);
     for _ in 0..m {
-        beta_coeffs_g1.push(read_g1(f).unwrap()); //?);
+        beta_coeffs_g1.push(read_g1(f).unwrap());
     }
 
     Ok(Phase1Parameters {
