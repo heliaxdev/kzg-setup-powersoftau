@@ -1,49 +1,27 @@
-use ark_std::rand;
-use std::{fs::{File, OpenOptions}, io::{self, BufReader, BufWriter, Read}, path::Path};
+use ark_bls12_381::Bls12_381;
+use ark_ec::PairingEngine;
+use ark_poly_commit::kzg10::{Powers, VerifierKey};
+use ark_serialize::{CanonicalDeserialize, SerializationError, Write};
+use minreq;
 use pairing::{
     bls12_381::{G1Uncompressed, G2Uncompressed},
     EncodedPoint,
 };
-use ark_bls12_381::Bls12_381;
-use ark_poly_commit::kzg10::{Powers, VerifierKey};
-use ark_ec::PairingEngine;
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError, Write};
-use minreq;
-use std::env;
-use pairing::{
-    Engine,
-    PrimeField,
-    Field,
-    CurveAffine,
-    CurveProjective,
-    Wnaf,
-    bls12_381::{
-        Bls12,
-        Fr,
-        G1,
-        G2,
-        G1Affine,
-        G2Affine,
-    }
+use std::{
+    fs::File,
+    io::{self, BufReader, Read},
+    path::Path,
 };
-use bls12_381::G1Projective;
-use bls12_381::G2Projective;
-use ark_ec::ProjectiveCurve;
-use powersoftau::{Accumulator, UseCompression, CheckForCorrectness, HashReader,
-    ACCUMULATOR_BYTE_SIZE,
-    CONTRIBUTION_BYTE_SIZE, 
-    DeserializationError};
 
 type ArkG1Affine = <ark_ec::bls12::Bls12<ark_bls12_381::Parameters> as PairingEngine>::G1Affine;
 type ArkG2Affine = <ark_ec::bls12::Bls12<ark_bls12_381::Parameters> as PairingEngine>::G2Affine;
-type ArkG1Prepared = <ark_ec::bls12::Bls12<ark_bls12_381::Parameters> as PairingEngine>::G1Prepared;
-type ArkG2Prepared = <ark_ec::bls12::Bls12<ark_bls12_381::Parameters> as PairingEngine>::G2Prepared;
 
 pub const KGZ_SETUP_FILE: &str = "kzg_setup";
 const KGZ_SETUP_FILE_DIGEST: &str = "87932f626204ab9a5d4be67ef2ee479471baf942364ada2f89840a2afec8925911fb88cb77024e66d759b4970b25cf2a7b03d1fc8c15768e021220b8ba21efcf";
 const TAU_POWERS_LENGTH: usize = 1 << 21;
 const TAU_POWERS_G1_LENGTH: usize = (TAU_POWERS_LENGTH << 1) - 1;
-const KGZ_SETUP_URL:&str = "https://heliax-ferveo-v1.s3-eu-west-1.amazonaws.com/ferveo-dkg-kzg-setup";
+const KGZ_SETUP_URL: &str =
+    "https://heliax-ferveo-v1.s3-eu-west-1.amazonaws.com/ferveo-dkg-kzg-setup";
 
 #[derive(Debug)]
 pub struct Phase1Parameters {
@@ -140,10 +118,7 @@ pub fn load_phase1(exp: u32) -> io::Result<Phase1Parameters> {
 
 pub fn download_kzg_setup() -> Result<(), minreq::Error> {
     fn check_file_hash(data: &[u8]) -> bool {
-        let hash = blake2b_simd::State::new()
-        .update(data)
-        .finalize()
-        .to_hex();
+        let hash = blake2b_simd::State::new().update(data).finalize().to_hex();
         &hash == KGZ_SETUP_FILE_DIGEST
     }
 
@@ -162,14 +137,14 @@ pub fn download_kzg_setup() -> Result<(), minreq::Error> {
     let powersoftau = minreq::get(KGZ_SETUP_URL).send()?;
     if !check_file_hash(powersoftau.as_bytes()) {
         return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    format!(
-                        "failed validation (expected: {}, fetched {} bytes)",
-                        KGZ_SETUP_FILE_DIGEST,
-                        powersoftau.as_bytes().len()
-                    ),
-                )
-                .into());
+            io::ErrorKind::InvalidData,
+            format!(
+                "failed validation (expected: {}, fetched {} bytes)",
+                KGZ_SETUP_FILE_DIGEST,
+                powersoftau.as_bytes().len()
+            ),
+        )
+        .into());
     }
 
     // Write parameter file.
@@ -179,7 +154,7 @@ pub fn download_kzg_setup() -> Result<(), minreq::Error> {
 }
 
 pub fn load_kzg_setup<'a>() -> (Powers<'a, Bls12_381>, VerifierKey<Bls12_381>) {
-    let reader = File::open(KGZ_SETUP_FILE).unwrap();    
+    let reader = File::open(KGZ_SETUP_FILE).unwrap();
     let mut reader = BufReader::new(reader);
     let mut powers_of_g = Vec::<ArkG1Affine>::with_capacity(TAU_POWERS_G1_LENGTH);
     let mut powers_of_gamma_g = Vec::<ArkG1Affine>::with_capacity(TAU_POWERS_LENGTH);
@@ -195,66 +170,36 @@ pub fn load_kzg_setup<'a>() -> (Powers<'a, Bls12_381>, VerifierKey<Bls12_381>) {
         powers_of_gamma_g: ark_std::borrow::Cow::Owned(powers_of_gamma_g),
     };
 
-    let vk: VerifierKey<Bls12_381> = VerifierKey::<Bls12_381>::deserialize_unchecked(reader).unwrap();
+    let vk: VerifierKey<Bls12_381> =
+        VerifierKey::<Bls12_381>::deserialize_unchecked(reader).unwrap();
 
     (powers, vk)
 }
 
-mod tests{
-    use std::{fs::File, io::BufReader};
+mod tests {
+    use crate::*;
+    use crate::{load_kzg_setup, ArkG1Affine};
     use ark_bls12_381::Bls12_381;
     use ark_ec::PairingEngine;
-    use ark_poly_commit::{Error, kzg10::{KZG10, Powers}, Polynomial};
-    use ark_poly_commit::PCVerifierKey;
-    use ark_std::test_rng;
-    use crate::{ArkG1Affine, load_kzg_setup};
-    use ark_serialize::{CanonicalDeserialize};
     use ark_poly::univariate::DensePolynomial as DensePoly;
-    use crate::*;
     use ark_poly_commit::kzg10::*;
-    use ark_serialize::{CanonicalSerialize, SerializationError};
-    use ark_std::UniformRand;
+    use ark_poly_commit::PCVerifierKey;
     use ark_poly_commit::UVPolynomial;
+    use ark_poly_commit::{
+        kzg10::{Powers, KZG10},
+        Error, Polynomial,
+    };
+    use ark_serialize::CanonicalDeserialize;
+    use ark_serialize::{CanonicalSerialize, SerializationError};
+    use ark_std::test_rng;
+    use ark_std::UniformRand;
+    use std::{fs::File, io::BufReader};
 
     type UniPoly_381 = DensePoly<<Bls12_381 as PairingEngine>::Fr>;
 
-#[test]
-    fn end_to_end_test_powersoftau() -> Result<(), Error> {
-        let (powers, vk) = load_kzg_setup();
-
-        let rng = &mut test_rng();
-        for _ in 0..10 {
-            let mut degree = 0;
-            while degree <= 1 {
-                degree = usize::rand(rng) % 20;
-            }
-            let mut comms = Vec::new();
-            let mut values = Vec::new();
-            let mut points = Vec::new();
-            let mut proofs = Vec::new();
-            for _ in 0..10 {
-                let p = UniPoly_381::rand(degree, rng);
-                let hiding_bound = Some(1);
-                let (comm, rand) = KZG10::<Bls12_381, UniPoly_381>::commit(&powers, &p, hiding_bound, Some(rng))?;
-                let point = <ark_ec::bls12::Bls12<ark_bls12_381::Parameters> as PairingEngine>::Fr::rand(rng);
-                let value = p.evaluate(&point);
-                let proof = KZG10::<Bls12_381, UniPoly_381>::open(&powers, &p, point, &rand)?;
-                assert!(KZG10::<Bls12_381, UniPoly_381>::check(&vk, &comm, point, value, &proof)?);
-                comms.push(comm);
-                values.push(value);
-                points.push(point);
-                proofs.push(proof);
-            }
-            assert!(KZG10::<Bls12_381, UniPoly_381>::batch_check(
-                &vk, &comms, &points, &values, &proofs, rng
-            )?);
-        }
-        Ok(())
-    }
-
     #[test]
-    fn batch_check_test_template() -> Result<(), Error>
-    {
+    fn end_to_end_test_powersoftau() -> Result<(), Error> {
+        download_kzg_setup().unwrap();
         let (powers, vk) = load_kzg_setup();
 
         let rng = &mut test_rng();
@@ -270,11 +215,17 @@ mod tests{
             for _ in 0..10 {
                 let p = UniPoly_381::rand(degree, rng);
                 let hiding_bound = Some(1);
-                let (comm, rand) = KZG10::<Bls12_381, UniPoly_381>::commit(&powers, &p, hiding_bound, Some(rng))?;
-                let point = <ark_ec::bls12::Bls12<ark_bls12_381::Parameters> as PairingEngine>::Fr::rand(rng);
+                let (comm, rand) =
+                    KZG10::<Bls12_381, UniPoly_381>::commit(&powers, &p, hiding_bound, Some(rng))?;
+                let point =
+                    <ark_ec::bls12::Bls12<ark_bls12_381::Parameters> as PairingEngine>::Fr::rand(
+                        rng,
+                    );
                 let value = p.evaluate(&point);
                 let proof = KZG10::<Bls12_381, UniPoly_381>::open(&powers, &p, point, &rand)?;
-                assert!(KZG10::<Bls12_381, UniPoly_381>::check(&vk, &comm, point, value, &proof)?);
+                assert!(KZG10::<Bls12_381, UniPoly_381>::check(
+                    &vk, &comm, point, value, &proof
+                )?);
                 comms.push(comm);
                 values.push(value);
                 points.push(point);

@@ -1,15 +1,20 @@
-use trusted_setup::{KGZ_SETUP_FILE, read_g1, read_g2};
-use std::io::Write;
-use std::{fs::{File, OpenOptions}, io::{self, BufReader, BufWriter, Read}};
 use ark_bls12_381::Bls12_381;
 use ark_ec::PairingEngine;
+use ark_poly_commit::kzg10::{Powers, VerifierKey};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError};
 use pairing::{
     bls12_381::{G1Uncompressed, G2Uncompressed},
     EncodedPoint,
 };
-use ark_poly_commit::kzg10::{Powers, VerifierKey};
-use powersoftau::{Accumulator, CONTRIBUTION_BYTE_SIZE, CheckForCorrectness, HashReader, UseCompression};
+use powersoftau::{
+    Accumulator, CheckForCorrectness, HashReader, UseCompression, CONTRIBUTION_BYTE_SIZE,
+};
+use std::io::Write;
+use std::{
+    fs::{File, OpenOptions},
+    io::{self, BufReader, BufWriter, Read},
+};
+use trusted_setup::{read_g1, read_g2, KGZ_SETUP_FILE};
 
 type ArkG1Affine = <ark_ec::bls12::Bls12<ark_bls12_381::Parameters> as PairingEngine>::G1Affine;
 type ArkG2Affine = <ark_ec::bls12::Bls12<ark_bls12_381::Parameters> as PairingEngine>::G2Affine;
@@ -29,12 +34,8 @@ struct PowersOfTau {
 
 use std::path::Path;
 fn download_parameters() -> Result<(), minreq::Error> {
-
     fn check_file_hash(data: &[u8]) -> bool {
-        let hash = blake2b_simd::State::new()
-        .update(data)
-        .finalize()
-        .to_hex();
+        let hash = blake2b_simd::State::new().update(data).finalize().to_hex();
         &hash == POWERSOFTAU_DIGEST
     }
 
@@ -53,14 +54,14 @@ fn download_parameters() -> Result<(), minreq::Error> {
     let powersoftau = minreq::get(DOWNLOAD_URL).send()?;
     if !check_file_hash(powersoftau.as_bytes()) {
         return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    format!(
-                        "failed validation (expected: {}, fetched {} bytes)",
-                        POWERSOFTAU_DIGEST,
-                        powersoftau.as_bytes().len()
-                    ),
-                )
-                .into());
+            io::ErrorKind::InvalidData,
+            format!(
+                "failed validation (expected: {}, fetched {} bytes)",
+                POWERSOFTAU_DIGEST,
+                powersoftau.as_bytes().len()
+            ),
+        )
+        .into());
     }
 
     // Write parameter file.
@@ -71,13 +72,25 @@ fn download_parameters() -> Result<(), minreq::Error> {
 
 fn powersoftau_uncompress() {
     let response_reader = OpenOptions::new()
-                            .read(true)
-                            .open(POWERSOFTAU_FILE).expect(&format!("unable open `{}` in this directory", POWERSOFTAU_FILE));
+        .read(true)
+        .open(POWERSOFTAU_FILE)
+        .expect(&format!(
+            "unable open `{}` in this directory",
+            POWERSOFTAU_FILE
+        ));
 
     {
-        let metadata = response_reader.metadata().expect(&format!("unable to get filesystem metadata for `{}`", POWERSOFTAU_FILE));
+        let metadata = response_reader.metadata().expect(&format!(
+            "unable to get filesystem metadata for `{}`",
+            POWERSOFTAU_FILE
+        ));
         if metadata.len() != (CONTRIBUTION_BYTE_SIZE as u64) {
-            panic!("The size of `{}` should be {}, but it's {}, so something isn't right.", POWERSOFTAU_FILE, CONTRIBUTION_BYTE_SIZE, metadata.len());
+            panic!(
+                "The size of `{}` should be {}, but it's {}, so something isn't right.",
+                POWERSOFTAU_FILE,
+                CONTRIBUTION_BYTE_SIZE,
+                metadata.len()
+            );
         }
     }
 
@@ -86,34 +99,44 @@ fn powersoftau_uncompress() {
 
     {
         let mut response_challenge_hash = [0; 64];
-        response_reader.read_exact(&mut response_challenge_hash).expect("couldn't read hash of challenge file from response file");
+        response_reader
+            .read_exact(&mut response_challenge_hash)
+            .expect("couldn't read hash of challenge file from response file");
     }
 
     println!("Started deserializing compressed Powers of Tau...");
     // Load the response's accumulator
-    let new_accumulator = Accumulator::deserialize(&mut response_reader, UseCompression::Yes, CheckForCorrectness::No)
-                                                  .expect("wasn't able to deserialize the response file's accumulator");
+    let new_accumulator = Accumulator::deserialize(
+        &mut response_reader,
+        UseCompression::Yes,
+        CheckForCorrectness::No,
+    )
+    .expect("wasn't able to deserialize the response file's accumulator");
 
     println!("Done deserializing.");
     let writer = OpenOptions::new()
-    .read(false)
-    .write(true)
-    .create_new(true)
-    .open(POWERSOFTAU_UNCOMPRESSED_FILE).expect(&format!("unable to create `{}`", POWERSOFTAU_UNCOMPRESSED_FILE).as_ref());
+        .read(false)
+        .write(true)
+        .create_new(true)
+        .open(POWERSOFTAU_UNCOMPRESSED_FILE)
+        .expect(&format!("unable to create `{}`", POWERSOFTAU_UNCOMPRESSED_FILE).as_ref());
 
     let mut writer = BufWriter::new(writer);
     println!("Started serializing unompressed Powers of Tau...");
-    new_accumulator.serialize(&mut writer, UseCompression::No)
-                    .expect("wasn't able to deserialize the response file's accumulator");
+    new_accumulator
+        .serialize(&mut writer, UseCompression::No)
+        .expect("wasn't able to deserialize the response file's accumulator");
     println!("Done serializing.");
-
 }
 
 fn load_powersoftau_accumulator() -> io::Result<PowersOfTau> {
     let f = match File::open(POWERSOFTAU_UNCOMPRESSED_FILE) {
         Ok(f) => f,
         Err(e) => {
-            panic!("Couldn't load {}. Error: {}", POWERSOFTAU_UNCOMPRESSED_FILE, e);
+            panic!(
+                "Couldn't load {}. Error: {}",
+                POWERSOFTAU_UNCOMPRESSED_FILE, e
+            );
         }
     };
     let f = &mut BufReader::with_capacity(1024 * 1024, f);
@@ -174,5 +197,8 @@ fn main() {
     }
     vk.serialize_uncompressed(buffer).unwrap();
 
-    println!("Done serializing. KZG parameters are stored in {}", KGZ_SETUP_FILE);
+    println!(
+        "Done serializing. KZG parameters are stored in {}",
+        KGZ_SETUP_FILE
+    );
 }
