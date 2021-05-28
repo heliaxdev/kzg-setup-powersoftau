@@ -28,7 +28,7 @@ struct PowersOfTau {
 }
 
 use std::path::Path;
-pub fn download_parameters() -> Result<(), minreq::Error> {
+fn download_parameters() -> Result<(), minreq::Error> {
 
     fn check_file_hash(data: &[u8]) -> bool {
         let hash = blake2b_simd::State::new()

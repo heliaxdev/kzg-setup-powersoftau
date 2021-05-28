@@ -1,5 +1,5 @@
 use ark_std::rand;
-use std::{fs::{File, OpenOptions}, io::{self, BufReader, BufWriter, Read}};
+use std::{fs::{File, OpenOptions}, io::{self, BufReader, BufWriter, Read}, path::Path};
 use pairing::{
     bls12_381::{G1Uncompressed, G2Uncompressed},
     EncodedPoint,
@@ -7,7 +7,7 @@ use pairing::{
 use ark_bls12_381::Bls12_381;
 use ark_poly_commit::kzg10::{Powers, VerifierKey};
 use ark_ec::PairingEngine;
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError, Write};
 use minreq;
 use std::env;
 use pairing::{
@@ -40,8 +40,10 @@ type ArkG1Prepared = <ark_ec::bls12::Bls12<ark_bls12_381::Parameters> as Pairing
 type ArkG2Prepared = <ark_ec::bls12::Bls12<ark_bls12_381::Parameters> as PairingEngine>::G2Prepared;
 
 pub const KGZ_SETUP_FILE: &str = "kzg_setup";
-pub const TAU_POWERS_LENGTH: usize = 1 << 21;
-pub const TAU_POWERS_G1_LENGTH: usize = (TAU_POWERS_LENGTH << 1) - 1;
+const KGZ_SETUP_FILE_DIGEST: &str = "87932f626204ab9a5d4be67ef2ee479471baf942364ada2f89840a2afec8925911fb88cb77024e66d759b4970b25cf2a7b03d1fc8c15768e021220b8ba21efcf";
+const TAU_POWERS_LENGTH: usize = 1 << 21;
+const TAU_POWERS_G1_LENGTH: usize = (TAU_POWERS_LENGTH << 1) - 1;
+const KGZ_SETUP_URL:&str = "https://heliax-ferveo-v1.s3-eu-west-1.amazonaws.com/ferveo-dkg-kzg-setup";
 
 #[derive(Debug)]
 pub struct Phase1Parameters {
@@ -97,9 +99,6 @@ pub fn read_g2(reader: &mut BufReader<File>) -> Result<ArkG2Affine, Serializatio
 
 pub fn load_phase1(exp: u32) -> io::Result<Phase1Parameters> {
     let m = 2_usize.pow(exp);
-    println!("exp = {:?}", exp);
-    println!("m = {:?}", m);
-    // let f = match File::open(format!("./my-response-uncompr-{}", exp)) {
     let f = match File::open(format!("../phase1radix2m{}", exp)) {
         Ok(f) => f,
         Err(e) => {
@@ -109,31 +108,24 @@ pub fn load_phase1(exp: u32) -> io::Result<Phase1Parameters> {
     let f = &mut BufReader::with_capacity(1024 * 1024, f);
 
     let alpha = read_g1(f).unwrap(); //?;
-    println!("read alpha: {:?}", alpha);
     let beta_g1 = read_g1(f).unwrap(); //?;
-    println!("read beta_g1: {:?}", beta_g1);
     let beta_g2 = read_g2(f).unwrap(); //?;
-    println!("read beta_g2: {:?}", beta_g2);
     let mut coeffs_g1 = Vec::with_capacity(m);
     for _ in 0..m {
         coeffs_g1.push(read_g1(f).unwrap()); //?);
     }
-    println!("read coeffs_g1[0], sample: {:?}", coeffs_g1[0]);
     let mut coeffs_g2 = Vec::with_capacity(m);
     for _ in 0..m {
         coeffs_g2.push(read_g2(f).unwrap()); //?);
     }
-    println!("read coeffs_g2[0], sample: {:?}", coeffs_g2[0]);
     let mut alpha_coeffs_g1 = Vec::with_capacity(m);
     for _ in 0..m {
         alpha_coeffs_g1.push(read_g1(f).unwrap()); //?);
     }
-    println!("read alpha_coeffs_g1[0], sample: {:?}", alpha_coeffs_g1[0]);
     let mut beta_coeffs_g1 = Vec::with_capacity(m);
     for _ in 0..m {
         beta_coeffs_g1.push(read_g1(f).unwrap()); //?);
     }
-    println!("read beta_coeffs_g1[0], sample: {:?}", beta_coeffs_g1[0]);
 
     Ok(Phase1Parameters {
         alpha: alpha,
@@ -144,6 +136,46 @@ pub fn load_phase1(exp: u32) -> io::Result<Phase1Parameters> {
         alpha_coeffs_g1: alpha_coeffs_g1,
         beta_coeffs_g1: beta_coeffs_g1,
     })
+}
+
+pub fn download_kzg_setup() -> Result<(), minreq::Error> {
+    fn check_file_hash(data: &[u8]) -> bool {
+        let hash = blake2b_simd::State::new()
+        .update(data)
+        .finalize()
+        .to_hex();
+        &hash == KGZ_SETUP_FILE_DIGEST
+    }
+
+    if Path::new(KGZ_SETUP_FILE).exists() {
+        println!("Checking existing {} file...", KGZ_SETUP_FILE);
+        let mut f = File::open(KGZ_SETUP_FILE)?;
+        let mut buffer = Vec::new();
+        f.read_to_end(&mut buffer)?;
+        if check_file_hash(&buffer) {
+            println!("Checking passed, using existing {} file.", KGZ_SETUP_FILE);
+            return Ok(());
+        }
+    }
+
+    println!("Downloading {}", KGZ_SETUP_URL);
+    let powersoftau = minreq::get(KGZ_SETUP_URL).send()?;
+    if !check_file_hash(powersoftau.as_bytes()) {
+        return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!(
+                        "failed validation (expected: {}, fetched {} bytes)",
+                        KGZ_SETUP_FILE_DIGEST,
+                        powersoftau.as_bytes().len()
+                    ),
+                )
+                .into());
+    }
+
+    // Write parameter file.
+    let mut f = File::create(KGZ_SETUP_FILE)?;
+    f.write_all(powersoftau.as_bytes())?;
+    return Ok(());
 }
 
 pub fn load_kzg_setup<'a>() -> (Powers<'a, Bls12_381>, VerifierKey<Bls12_381>) {

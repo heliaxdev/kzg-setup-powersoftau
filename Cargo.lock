@@ -124,6 +124,8 @@ dependencies = [
 [[package]]
 name = "ark-poly-commit"
 version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ad7df2d50062d718e5914d013ee2f30dc203324e08070d16b241e869b8717ed6"
 dependencies = [
  "ark-ec",
  "ark-ff",
@@ -814,6 +816,7 @@ checksum = "dc0e1f259c92177c30a4c9d177246edd0a3568b25756a977d0632cf8fa37e905"
 [[package]]
 name = "powersoftau"
 version = "0.1.1"
+source = "git+https://github.com/heliaxdev/powersoftau.git#e3318303a4894dd6cb7a66cff1e291c304caede3"
 dependencies = [
  "bellman 0.1.0",
  "blake2",
