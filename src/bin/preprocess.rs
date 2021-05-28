@@ -125,6 +125,11 @@ fn powersoftau_uncompress() {
     let response_reader = BufReader::new(response_reader);
     let mut response_reader = HashReader::new(response_reader);
 
+    {
+        let mut response_challenge_hash = [0; 64];
+        response_reader.read_exact(&mut response_challenge_hash).expect("couldn't read hash of challenge file from response file");
+    }
+
     println!("Started deserializing compressed Powers of Tau...");
     // Load the response's accumulator
     let new_accumulator = Accumulator::deserialize(&mut response_reader, UseCompression::Yes, CheckForCorrectness::No)
