@@ -9,7 +9,6 @@ readme = "README.md"
 description = "Loading Powers of Tau as KZG setup parameters."
 keywords = ["KZG", "powersoftau", "trusted setup"]
 categories = ["cryptography"]
-authors = ["Heliax AG <hello@heliax.dev>"]
 
 [dependencies]
 bellman = "0.9.0"
@@ -21,8 +20,7 @@ ark-poly = {version = "^0.2.0", default-features = false }
 ark-bls12-381 = { version = "^0.2.0", default-features = false, features = [ "curve" ] }
 ark-bls12-377 = { version = "^0.2.0", default-features = false, features = [ "curve" ] }
 ark-std = { version = "^0.2.0", default-features = false }
-# ark-poly-commit = "0.2.0"
-ark-poly-commit = {path = "/home/george/Projects/heliax/trusted-setup/poly-commit-heliax"}
+ark-poly-commit = "0.2.0"
 ark-ff = { version = "^0.2.0", default-features = false }
 ark-serialize = "0.2.0"
 pairing = "0.14"
