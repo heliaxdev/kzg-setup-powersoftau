@@ -124,6 +124,8 @@ dependencies = [
 [[package]]
 name = "ark-poly-commit"
 version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ad7df2d50062d718e5914d013ee2f30dc203324e08070d16b241e869b8717ed6"
 dependencies = [
  "ark-ec",
  "ark-ff",
@@ -668,6 +670,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "kzg-setup-powersoftau"
+version = "1.0.0"
+dependencies = [
+ "ark-bls12-377",
+ "ark-bls12-381",
+ "ark-ec",
+ "ark-ff",
+ "ark-poly",
+ "ark-poly-commit",
+ "ark-serialize",
+ "ark-std",
+ "bellman 0.9.0",
+ "blake2b_simd",
+ "bls12_381",
+ "minreq",
+ "pairing 0.14.2",
+ "powersoftau",
+]
+
+[[package]]
 name = "lazy_static"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1177,26 +1199,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aa5553bf0883ba7c9cbe493b085c29926bd41b66afc31ff72cf17ff4fb60dcd5"
 dependencies = [
  "tracing-core",
-]
-
-[[package]]
-name = "trusted-setup"
-version = "0.0.1"
-dependencies = [
- "ark-bls12-377",
- "ark-bls12-381",
- "ark-ec",
- "ark-ff",
- "ark-poly",
- "ark-poly-commit",
- "ark-serialize",
- "ark-std",
- "bellman 0.9.0",
- "blake2b_simd",
- "bls12_381",
- "minreq",
- "pairing 0.14.2",
- "powersoftau",
 ]
 
 [[package]]
