@@ -1,6 +1,7 @@
 use ark_bls12_381::Bls12_381;
+use std::collections::BTreeMap;
 use ark_ec::PairingEngine;
-use ark_poly_commit::kzg10::{Powers, VerifierKey};
+use ark_poly_commit::kzg10::UniversalParams;
 use ark_serialize::CanonicalSerialize;
 use powersoftau::{
     Accumulator, CheckForCorrectness, HashReader, UseCompression, CONTRIBUTION_BYTE_SIZE,
@@ -10,7 +11,7 @@ use std::{
     fs::{File, OpenOptions},
     io::{self, BufReader, BufWriter, Read},
 };
-use trusted_setup::{read_g1, read_g2, KGZ_SETUP_FILE};
+use kzg_setup_powersoftau::{read_g1, read_g2, KZG_SETUP_FILE};
 
 type ArkG1Affine = <ark_ec::bls12::Bls12<ark_bls12_381::Parameters> as PairingEngine>::G1Affine;
 type ArkG2Affine = <ark_ec::bls12::Bls12<ark_bls12_381::Parameters> as PairingEngine>::G2Affine;
@@ -125,7 +126,7 @@ fn powersoftau_uncompress() {
     println!("Done serializing.");
 }
 
-fn load_powersoftau_accumulator() -> io::Result<PowersOfTau> {
+fn load_powersoftau_accumulator() -> io::Result<(UniversalParams::<Bls12_381>, Vec<ArkG2Affine>)> {
     let f = match File::open(POWERSOFTAU_UNCOMPRESSED_FILE) {
         Ok(f) => f,
         Err(e) => {
@@ -147,16 +148,33 @@ fn load_powersoftau_accumulator() -> io::Result<PowersOfTau> {
         tau_powers_g2.push(read_g2(f).unwrap());
     }
 
-    let mut alpha_tau_powers_g1 = Vec::with_capacity(TAU_POWERS_LENGTH);
-    for _ in 0..TAU_POWERS_LENGTH {
-        alpha_tau_powers_g1.push(read_g1(f).unwrap());
+    let mut alpha_tau_powers_g1 = BTreeMap::<usize, ArkG1Affine>::new();
+    for i in 0..TAU_POWERS_LENGTH {
+        alpha_tau_powers_g1.insert(i, read_g1(f).unwrap());
     }
 
-    Ok(PowersOfTau {
-        tau_powers_g1: tau_powers_g1,
-        tau_powers_g2: tau_powers_g2,
-        alpha_tau_powers_g1: alpha_tau_powers_g1,
-    })
+    let mut beta_tau_powers_g1 = Vec::with_capacity(TAU_POWERS_LENGTH);
+    for _ in 0..TAU_POWERS_LENGTH {
+        beta_tau_powers_g1.push(read_g1(f).unwrap());
+    }
+
+    // let beta_g2 = read_g2(f).unwrap();
+
+    let h = tau_powers_g2[0];
+    let beta_h = tau_powers_g2[1];
+
+    Ok((UniversalParams::<Bls12_381>{
+            powers_of_g: tau_powers_g1,
+            powers_of_gamma_g: alpha_tau_powers_g1,
+            h: h,
+            beta_h: beta_h,
+            neg_powers_of_h: ark_std::collections::BTreeMap::new(),
+            prepared_h: h.into(),
+            prepared_beta_h: beta_h.into(),
+        },
+        tau_powers_g2
+        )
+    )
 }
 
 fn main() {
@@ -165,36 +183,32 @@ fn main() {
 
     powersoftau_uncompress();
 
-    let params = load_powersoftau_accumulator().unwrap();
+    let (univ_params, powers_of_h) = load_powersoftau_accumulator().unwrap();
     println!("Loaded Powers of Tau");
 
     println!("Preparing KZG parameters");
-    let powersoftau = Powers::<Bls12_381> {
-        powers_of_g: ark_std::borrow::Cow::Owned(params.tau_powers_g1.to_vec()),
-        powers_of_gamma_g: ark_std::borrow::Cow::Owned(params.alpha_tau_powers_g1.to_vec()),
-    };
-
-    let vk: VerifierKey<Bls12_381> = VerifierKey {
-        g: powersoftau.powers_of_g[0],
-        gamma_g: powersoftau.powers_of_gamma_g[0],
-        h: params.tau_powers_g2[0],
-        beta_h: params.tau_powers_g2[1],
-        prepared_h: params.tau_powers_g2[0].into(),
-        prepared_beta_h: params.tau_powers_g2[1].into(),
-    };
 
     println!("Serializing KZG parameters...");
-    let buffer = File::create(KGZ_SETUP_FILE).unwrap();
-    for g in powersoftau.powers_of_g.iter() {
+    let buffer = File::create(KZG_SETUP_FILE).unwrap();
+    for g in univ_params.powers_of_g.iter() {
         g.serialize_uncompressed(&buffer).unwrap();
     }
-    for g in powersoftau.powers_of_gamma_g.iter() {
+    for (_, g) in univ_params.powers_of_gamma_g.iter() {
         g.serialize_uncompressed(&buffer).unwrap();
     }
-    vk.serialize_uncompressed(buffer).unwrap();
+
+    univ_params.h.serialize_uncompressed(&buffer).unwrap();
+    univ_params.beta_h.serialize_uncompressed(&buffer).unwrap();
+    for n in univ_params.neg_powers_of_h {
+        n.serialize_uncompressed(&buffer).unwrap();
+    }
+
+    for p in powers_of_h {
+        p.serialize_uncompressed(&buffer).unwrap();
+    }
 
     println!(
         "Done serializing. KZG parameters are stored in {}",
-        KGZ_SETUP_FILE
+        KZG_SETUP_FILE
     );
 }
