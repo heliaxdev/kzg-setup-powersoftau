@@ -2,6 +2,7 @@ use ark_bls12_381::Bls12_381;
 use ark_ec::PairingEngine;
 use ark_poly_commit::kzg10::{Powers, VerifierKey};
 use ark_serialize::CanonicalSerialize;
+use kzg_setup_powersoftau::{read_g1, read_g2, KZG_SETUP_FILE};
 use powersoftau::{
     Accumulator, CheckForCorrectness, HashReader, UseCompression, CONTRIBUTION_BYTE_SIZE,
 };
@@ -10,7 +11,6 @@ use std::{
     fs::{File, OpenOptions},
     io::{self, BufReader, BufWriter, Read},
 };
-use kzg_setup_powersoftau::{read_g1, read_g2, KZG_SETUP_FILE};
 
 type ArkG1Affine = <ark_ec::bls12::Bls12<ark_bls12_381::Parameters> as PairingEngine>::G1Affine;
 type ArkG2Affine = <ark_ec::bls12::Bls12<ark_bls12_381::Parameters> as PairingEngine>::G2Affine;

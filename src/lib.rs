@@ -1,5 +1,4 @@
 use ark_bls12_381::Bls12_381;
-use std::collections::BTreeMap;
 use ark_ec::PairingEngine;
 use ark_poly_commit::kzg10::{Powers, UniversalParams, VerifierKey};
 use ark_serialize::{CanonicalDeserialize, SerializationError, Write};
@@ -8,6 +7,7 @@ use pairing::{
     bls12_381::{G1Uncompressed, G2Uncompressed},
     EncodedPoint,
 };
+use std::collections::BTreeMap;
 use std::{
     fs::File,
     io::{self, BufReader, Read},
@@ -120,12 +120,15 @@ pub fn load_phase1(exp: u32) -> io::Result<Phase1Parameters> {
     })
 }
 
-fn download_setup(file_url: &str, file_digest: &str, check_digest: bool) -> Result<(), minreq::Error> {
+fn download_setup(
+    file_url: &str,
+    file_digest: &str,
+    check_digest: bool,
+) -> Result<(), minreq::Error> {
     fn check_file_hash(data: &[u8], file_digest: &str) -> bool {
         let hash = blake2b_simd::State::new().update(data).finalize().to_hex();
         &hash == file_digest
     }
-
 
     if Path::new(KZG_SETUP_FILE).exists() {
         if check_digest && Path::new(KZG_SETUP_FILE).exists() {
@@ -203,13 +206,13 @@ pub fn load_fastkzg_setup() -> (UniversalParams<Bls12_381>, Vec<ArkG2Affine>) {
         powers_of_gamma_g.insert(i, ArkG1Affine::deserialize_unchecked(&mut reader).unwrap());
     }
 
-	let h = ArkG2Affine::deserialize_unchecked(&mut reader).unwrap();
-	let beta_h = ArkG2Affine::deserialize_unchecked(&mut reader).unwrap();
+    let h = ArkG2Affine::deserialize_unchecked(&mut reader).unwrap();
+    let beta_h = ArkG2Affine::deserialize_unchecked(&mut reader).unwrap();
 
     let mut powers_of_h = Vec::<ArkG2Affine>::with_capacity(TAU_POWERS_LENGTH);
-	for _ in 0..TAU_POWERS_LENGTH {
-		powers_of_h.push(ArkG2Affine::deserialize_unchecked(&mut reader).unwrap());
-	}
+    for _ in 0..TAU_POWERS_LENGTH {
+        powers_of_h.push(ArkG2Affine::deserialize_unchecked(&mut reader).unwrap());
+    }
 
     let params = UniversalParams::<Bls12_381> {
         powers_of_g: powers_of_g,
@@ -220,7 +223,6 @@ pub fn load_fastkzg_setup() -> (UniversalParams<Bls12_381>, Vec<ArkG2Affine>) {
         prepared_h: h.into(),
         prepared_beta_h: beta_h.into(),
     };
-
 
     (params, powers_of_h)
 }

@@ -1,17 +1,17 @@
 use ark_bls12_381::Bls12_381;
-use std::collections::BTreeMap;
 use ark_ec::PairingEngine;
 use ark_poly_commit::kzg10::UniversalParams;
 use ark_serialize::CanonicalSerialize;
+use kzg_setup_powersoftau::{read_g1, read_g2, KZG_SETUP_FILE};
 use powersoftau::{
     Accumulator, CheckForCorrectness, HashReader, UseCompression, CONTRIBUTION_BYTE_SIZE,
 };
+use std::collections::BTreeMap;
 use std::io::Write;
 use std::{
     fs::{File, OpenOptions},
     io::{self, BufReader, BufWriter, Read},
 };
-use kzg_setup_powersoftau::{read_g1, read_g2, KZG_SETUP_FILE};
 
 type ArkG1Affine = <ark_ec::bls12::Bls12<ark_bls12_381::Parameters> as PairingEngine>::G1Affine;
 type ArkG2Affine = <ark_ec::bls12::Bls12<ark_bls12_381::Parameters> as PairingEngine>::G2Affine;
@@ -126,7 +126,7 @@ fn powersoftau_uncompress() {
     println!("Done serializing.");
 }
 
-fn load_powersoftau_accumulator() -> io::Result<(UniversalParams::<Bls12_381>, Vec<ArkG2Affine>)> {
+fn load_powersoftau_accumulator() -> io::Result<(UniversalParams<Bls12_381>, Vec<ArkG2Affine>)> {
     let f = match File::open(POWERSOFTAU_UNCOMPRESSED_FILE) {
         Ok(f) => f,
         Err(e) => {
@@ -163,7 +163,8 @@ fn load_powersoftau_accumulator() -> io::Result<(UniversalParams::<Bls12_381>, V
     let h = tau_powers_g2[0];
     let beta_h = tau_powers_g2[1];
 
-    Ok((UniversalParams::<Bls12_381>{
+    Ok((
+        UniversalParams::<Bls12_381> {
             powers_of_g: tau_powers_g1,
             powers_of_gamma_g: alpha_tau_powers_g1,
             h: h,
@@ -172,9 +173,8 @@ fn load_powersoftau_accumulator() -> io::Result<(UniversalParams::<Bls12_381>, V
             prepared_h: h.into(),
             prepared_beta_h: beta_h.into(),
         },
-        tau_powers_g2
-        )
-    )
+        tau_powers_g2,
+    ))
 }
 
 fn main() {
