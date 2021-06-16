@@ -120,49 +120,52 @@ pub fn load_phase1(exp: u32) -> io::Result<Phase1Parameters> {
     })
 }
 
-fn download_setup(file_url: &str, file_digest: &str) -> Result<(), minreq::Error> {
+fn download_setup(file_url: &str, file_digest: &str, check_digest: bool) -> Result<(), minreq::Error> {
     fn check_file_hash(data: &[u8], file_digest: &str) -> bool {
         let hash = blake2b_simd::State::new().update(data).finalize().to_hex();
         &hash == file_digest
     }
 
+
     if Path::new(KZG_SETUP_FILE).exists() {
-        println!("Checking existing {} file...", KZG_SETUP_FILE);
-        let mut f = File::open(KZG_SETUP_FILE)?;
-        let mut buffer = Vec::new();
-        f.read_to_end(&mut buffer)?;
-        if check_file_hash(&buffer, file_digest) {
-            println!("Checking passed, using existing {} file.", KZG_SETUP_FILE);
-            return Ok(());
+        if check_digest && Path::new(KZG_SETUP_FILE).exists() {
+            println!("Checking existing {} file...", KZG_SETUP_FILE);
+            let mut f = File::open(KZG_SETUP_FILE)?;
+            let mut buffer = Vec::new();
+            f.read_to_end(&mut buffer)?;
+            if check_file_hash(&buffer, file_digest) {
+                println!("Checking passed, using existing {} file.", KZG_SETUP_FILE);
+                return Ok(());
+            }
         }
-    }
+    } else {
+        println!("Downloading {}", file_url);
+        let powersoftau = minreq::get(file_url).send()?;
+        if !check_file_hash(powersoftau.as_bytes(), file_digest) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "failed validation (expected: {}, fetched {} bytes)",
+                    file_digest,
+                    powersoftau.as_bytes().len()
+                ),
+            )
+            .into());
+        }
 
-    println!("Downloading {}", file_url);
-    let powersoftau = minreq::get(file_url).send()?;
-    if !check_file_hash(powersoftau.as_bytes(), file_digest) {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            format!(
-                "failed validation (expected: {}, fetched {} bytes)",
-                file_digest,
-                powersoftau.as_bytes().len()
-            ),
-        )
-        .into());
+        // Write parameter file.
+        let mut f = File::create(KZG_SETUP_FILE)?;
+        f.write_all(powersoftau.as_bytes())?;
     }
-
-    // Write parameter file.
-    let mut f = File::create(KZG_SETUP_FILE)?;
-    f.write_all(powersoftau.as_bytes())?;
     return Ok(());
 }
 
-pub fn download_kzg_setup() -> Result<(), minreq::Error> {
-    download_setup(KZG_SETUP_URL, KZG_SETUP_FILE_DIGEST)
+pub fn download_kzg_setup(check_digest: bool) -> Result<(), minreq::Error> {
+    download_setup(KZG_SETUP_URL, KZG_SETUP_FILE_DIGEST, check_digest)
 }
 
-pub fn download_fastkzg_setup() -> Result<(), minreq::Error> {
-    download_setup(FASTKZG_SETUP_URL, FASTKZG_SETUP_FILE_DIGEST)
+pub fn download_fastkzg_setup(check_digest: bool) -> Result<(), minreq::Error> {
+    download_setup(FASTKZG_SETUP_URL, FASTKZG_SETUP_FILE_DIGEST, check_digest)
 }
 
 pub fn load_kzg_setup<'a>() -> (Powers<'a, Bls12_381>, VerifierKey<Bls12_381>) {
